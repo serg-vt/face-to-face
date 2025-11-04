@@ -224,10 +224,16 @@ function MeetingPage() {
 
     // Handle incoming stream
     peer.ontrack = (event) => {
-      console.log('Received track from:', userId);
-      peerConnection.stream = event.streams[0];
-      peersRef.current.set(userId, peerConnection);
-      setPeers(new Map(peersRef.current));
+      console.log('Received track from:', userId, 'Track kind:', event.track.kind);
+      console.log('Event streams:', event.streams);
+      if (event.streams && event.streams[0]) {
+        peerConnection.stream = event.streams[0];
+        console.log('Stream set for peer:', userId, 'Stream tracks:', event.streams[0].getTracks().length);
+        peersRef.current.set(userId, peerConnection);
+        setPeers(new Map(peersRef.current));
+      } else {
+        console.error('No stream in track event for peer:', userId);
+      }
     };
 
     peersRef.current.set(userId, peerConnection);
@@ -278,10 +284,16 @@ function MeetingPage() {
 
     // Handle incoming stream
     peer.ontrack = (event) => {
-      console.log('Received track from:', from);
-      peerConnection.stream = event.streams[0];
-      peersRef.current.set(from, peerConnection);
-      setPeers(new Map(peersRef.current));
+      console.log('Received track from:', from, 'Track kind:', event.track.kind);
+      console.log('Event streams:', event.streams);
+      if (event.streams && event.streams[0]) {
+        peerConnection.stream = event.streams[0];
+        console.log('Stream set for peer:', from, 'Stream tracks:', event.streams[0].getTracks().length);
+        peersRef.current.set(from, peerConnection);
+        setPeers(new Map(peersRef.current));
+      } else {
+        console.error('No stream in track event for peer:', from);
+      }
     };
 
     await peer.setRemoteDescription(new RTCSessionDescription(offer));
@@ -373,14 +385,19 @@ function MeetingPage() {
                 <p className="room-id-hint">Share room ID: <strong>{roomId}</strong></p>
               </div>
             ) : (
-              Array.from(peers.entries()).map(([userId, peerConnection]) => (
-                peerConnection.stream && (
+              Array.from(peers.entries()).map(([userId, peerConnection]) => {
+                console.log('Rendering peer:', userId, 'has stream:', !!peerConnection.stream);
+                return peerConnection.stream ? (
                   <RemoteVideo
                     key={userId}
                     stream={peerConnection.stream}
                   />
-                )
-              ))
+                ) : (
+                  <div key={userId} className="video-container">
+                    <div className="video-label">Connecting...</div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -444,8 +461,12 @@ function RemoteVideo({ stream }: RemoteVideoProps) {
   const analyserRef = useRef<AnalyserNode | null>(null);
 
   useEffect(() => {
-    if (videoRef.current) {
+    console.log('RemoteVideo mounted with stream:', stream);
+    console.log('Stream tracks:', stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
+
+    if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      console.log('Set srcObject for remote video');
     }
 
     // Setup voice detection for remote stream
