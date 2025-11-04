@@ -1,0 +1,13 @@
+# Deployment ignore files
+node_modules
+.env
+.env.local
+.DS_Store
+*.log
+npm-debug.log*
+.idea
+.vscode
+*.md
+!README.md
+client-old
+
