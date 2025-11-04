@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
-const mime = require('mime');
+const mime = require('mime-types');
 const app = express();
 const http = require('http').createServer(app);
 
@@ -27,7 +27,7 @@ if (process.env.NODE_ENV === 'production') {
   // Configure static file serving with proper MIME types
   app.use(express.static(clientDistPath, {
     setHeaders: (res, filePath) => {
-      const mimeType = mime.getType(filePath);
+      const mimeType = mime.lookup(filePath);
       if (mimeType) {
         res.setHeader('Content-Type', mimeType);
       }
