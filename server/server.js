@@ -90,6 +90,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('offer', (data) => {
+    console.log(`Relaying offer from ${socket.id} to ${data.to}`);
     socket.to(data.to).emit('offer', {
       offer: data.offer,
       from: socket.id
@@ -97,6 +98,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('answer', (data) => {
+    console.log(`Relaying answer from ${socket.id} to ${data.to}`);
     socket.to(data.to).emit('answer', {
       answer: data.answer,
       from: socket.id
@@ -104,6 +106,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('ice-candidate', (data) => {
+    console.log(`Relaying ICE candidate from ${socket.id} to ${data.to}`);
     socket.to(data.to).emit('ice-candidate', {
       candidate: data.candidate,
       from: socket.id

@@ -157,15 +157,18 @@ function MeetingPage() {
 
     socket.on('existing-users', (users: string[]) => {
       console.log('Existing users in room:', users);
-      // Connect to all existing users
+      // New joiner initiates connections to all existing users
       users.forEach(userId => {
+        console.log('Initiating connection to existing user:', userId);
         createPeerConnection(userId, true);
       });
     });
 
     socket.on('user-connected', (userId: string) => {
       console.log('User connected:', userId);
-      createPeerConnection(userId, true);
+      // Existing user does NOT initiate - will receive offer from new user
+      // Just log, peer connection will be created when offer arrives
+      console.log('New user joined, waiting for their offer');
     });
 
     socket.on('offer', async ({ offer, from }: { offer: RTCSessionDescriptionInit; from: string }) => {
@@ -181,11 +184,18 @@ function MeetingPage() {
       }
     });
 
-    socket.on('ice-candidate', ({ candidate, from }: { candidate: RTCIceCandidateInit; from: string }) => {
+    socket.on('ice-candidate', async ({ candidate, from }: { candidate: RTCIceCandidateInit; from: string }) => {
       console.log('Received ICE candidate from:', from);
       const peerConnection = peersRef.current.get(from);
       if (peerConnection) {
-        peerConnection.peer.addIceCandidate(new RTCIceCandidate(candidate));
+        try {
+          await peerConnection.peer.addIceCandidate(new RTCIceCandidate(candidate));
+          console.log('Added ICE candidate from:', from);
+        } catch (error) {
+          console.error('Error adding ICE candidate:', error);
+        }
+      } else {
+        console.warn('Received ICE candidate for unknown peer:', from);
       }
     });
 
@@ -205,6 +215,15 @@ function MeetingPage() {
     console.log('Creating peer connection to:', userId, 'isInitiator:', isInitiator);
     const peer = new RTCPeerConnection(iceServers);
     const peerConnection: PeerConnection = { peer };
+
+    // Monitor connection state
+    peer.oniceconnectionstatechange = () => {
+      console.log('ICE connection state for', userId, ':', peer.iceConnectionState);
+    };
+
+    peer.onconnectionstatechange = () => {
+      console.log('Connection state for', userId, ':', peer.connectionState);
+    };
 
     // Add local stream to peer connection
     stream.getTracks().forEach(track => {
@@ -265,6 +284,15 @@ function MeetingPage() {
     console.log('Handling offer from:', from);
     const peer = new RTCPeerConnection(iceServers);
     const peerConnection: PeerConnection = { peer };
+
+    // Monitor connection state
+    peer.oniceconnectionstatechange = () => {
+      console.log('ICE connection state for', from, ':', peer.iceConnectionState);
+    };
+
+    peer.onconnectionstatechange = () => {
+      console.log('Connection state for', from, ':', peer.connectionState);
+    };
 
     // Add local stream
     stream.getTracks().forEach(track => {
