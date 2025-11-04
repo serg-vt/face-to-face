@@ -26,6 +26,7 @@ function MeetingPage() {
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
 
   const iceServers = {
     iceServers: [
@@ -40,9 +41,13 @@ function MeetingPage() {
       return;
     }
 
-    // Initialize media and socket
-    initializeMedia();
-    initializeSocket();
+    // Initialize media first, then socket after media is ready
+    const init = async () => {
+      await initializeMedia();
+      initializeSocket();
+    };
+
+    init();
 
     return () => {
       // Cleanup
@@ -57,6 +62,8 @@ function MeetingPage() {
         audio: true
       });
 
+      // Store in ref immediately for peer connections
+      localStreamRef.current = stream;
       setLocalStream(stream);
 
       if (localVideoRef.current) {
@@ -65,6 +72,8 @@ function MeetingPage() {
 
       // Setup voice activity detection
       setupVoiceDetection(stream);
+
+      console.log('Media stream initialized, ready for peer connections');
     } catch (error) {
       console.error('Error accessing media devices:', error);
       alert('Could not access camera/microphone. Please check permissions.');
@@ -124,9 +133,20 @@ function MeetingPage() {
   };
 
   const initializeSocket = () => {
-    // Use environment variable if available, otherwise construct from window location
-    const serverUrl = import.meta.env.VITE_SERVER_URL ||
-      `${window.location.protocol}//${window.location.hostname}:3000`;
+    // In production (deployed), connect to same origin as the app
+    // In development, use VITE_SERVER_URL or localhost:3000
+    let serverUrl;
+    if (import.meta.env.VITE_SERVER_URL) {
+      serverUrl = import.meta.env.VITE_SERVER_URL;
+    } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      // Development mode
+      serverUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
+    } else {
+      // Production mode - connect to same origin
+      serverUrl = window.location.origin;
+    }
+
+    console.log('Connecting to Socket.IO server:', serverUrl);
     const socket = io(serverUrl);
     socketRef.current = socket;
 
@@ -176,14 +196,20 @@ function MeetingPage() {
   };
 
   const createPeerConnection = (userId: string, isInitiator: boolean) => {
-    if (!localStream) return;
+    const stream = localStreamRef.current;
+    if (!stream) {
+      console.error('No local stream available for peer connection');
+      return;
+    }
 
+    console.log('Creating peer connection to:', userId, 'isInitiator:', isInitiator);
     const peer = new RTCPeerConnection(iceServers);
     const peerConnection: PeerConnection = { peer };
 
     // Add local stream to peer connection
-    localStream.getTracks().forEach(track => {
-      peer.addTrack(track, localStream);
+    stream.getTracks().forEach(track => {
+      peer.addTrack(track, stream);
+      console.log('Added track:', track.kind, 'to peer connection');
     });
 
     // Handle ICE candidates
@@ -224,14 +250,20 @@ function MeetingPage() {
   };
 
   const handleOffer = async (offer: RTCSessionDescriptionInit, from: string) => {
-    if (!localStream) return;
+    const stream = localStreamRef.current;
+    if (!stream) {
+      console.error('No local stream available for handling offer');
+      return;
+    }
 
+    console.log('Handling offer from:', from);
     const peer = new RTCPeerConnection(iceServers);
     const peerConnection: PeerConnection = { peer };
 
     // Add local stream
-    localStream.getTracks().forEach(track => {
-      peer.addTrack(track, localStream);
+    stream.getTracks().forEach(track => {
+      peer.addTrack(track, stream);
+      console.log('Added track:', track.kind, 'for answering offer');
     });
 
     // Handle ICE candidates
@@ -304,6 +336,7 @@ function MeetingPage() {
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
     }
+    localStreamRef.current = null;
 
     // Close audio context
     if (audioContextRef.current) {
