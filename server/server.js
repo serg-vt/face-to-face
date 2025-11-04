@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
+const mime = require('mime');
 const app = express();
 const http = require('http').createServer(app);
 
@@ -22,10 +23,28 @@ const io = require('socket.io')(http, {
 if (process.env.NODE_ENV === 'production') {
   // Serve built React app in production
   const clientDistPath = path.join(__dirname, '../client/dist');
-  app.use(express.static(clientDistPath));
+
+  // Configure static file serving with proper MIME types
+  app.use(express.static(clientDistPath, {
+    setHeaders: (res, filePath) => {
+      const mimeType = mime.getType(filePath);
+      if (mimeType) {
+        res.setHeader('Content-Type', mimeType);
+      }
+      // Explicitly set for JS modules
+      if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
+      }
+    }
+  }));
 
   // Handle React routing - send all requests to index.html
+  // Exclude socket.io and API routes
   app.get('*', (req, res) => {
+    // Don't catch socket.io or static file requests
+    if (req.path.startsWith('/socket.io') || req.path.includes('.')) {
+      return;
+    }
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 } else {

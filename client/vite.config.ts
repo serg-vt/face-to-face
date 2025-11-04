@@ -10,6 +10,13 @@ export default defineConfig({
       },
     }),
   ],
+  base: '/',
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: false,
+    minify: 'esbuild',
+  },
   server: {
     host: '0.0.0.0', // Expose to local network
     port: 5173,
