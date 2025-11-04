@@ -27,14 +27,24 @@ if (process.env.NODE_ENV === 'production') {
   // Configure static file serving with proper MIME types
   app.use(express.static(clientDistPath, {
     setHeaders: (res, filePath) => {
-      const mimeType = mime.lookup(filePath);
-      if (mimeType) {
-        res.setHeader('Content-Type', mimeType);
-      }
-      // Explicitly set for JS modules
+      let contentType;
+
+      // Explicitly set for JS modules first (most important)
       if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
+        contentType = 'application/javascript; charset=UTF-8';
+      } else if (filePath.endsWith('.css')) {
+        contentType = 'text/css; charset=UTF-8';
+      } else if (filePath.endsWith('.json')) {
+        contentType = 'application/json; charset=UTF-8';
+      } else if (filePath.endsWith('.html')) {
+        contentType = 'text/html; charset=UTF-8';
+      } else {
+        // For all other files, try mime.lookup
+        contentType = mime.lookup(filePath) || 'application/octet-stream';
       }
+
+      res.setHeader('Content-Type', contentType);
+      console.log(`Serving: ${path.basename(filePath)} with Content-Type: ${contentType}`);
     }
   }));
 
