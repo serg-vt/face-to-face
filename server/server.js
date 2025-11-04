@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const path = require('path');
 const app = express();
 const http = require('http').createServer(app);
 
@@ -20,15 +21,16 @@ const io = require('socket.io')(http, {
 // Serve static files
 if (process.env.NODE_ENV === 'production') {
   // Serve built React app in production
-  app.use(express.static('../client/dist'));
+  const clientDistPath = path.join(__dirname, '../client/dist');
+  app.use(express.static(clientDistPath));
 
   // Handle React routing - send all requests to index.html
   app.get('*', (req, res) => {
-    res.sendFile('index.html', { root: '../client/dist' });
+    res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 } else {
   // In development, just serve static files (not typically used)
-  app.use(express.static('../client'));
+  app.use(express.static(path.join(__dirname, '../client')));
 }
 
 const rooms = new Map();
