@@ -1,36 +1,33 @@
 .remote-video {
   &__container {
-    position: relative;
     background: #000;
-    border-radius: 8px;
-    overflow: hidden;
     aspect-ratio: 16 / 9;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    border: 2px solid transparent;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
-    &--speaking {
-      border-color: #2196f3;
-      box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3);
-    }
+    //box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    //border: 2px solid transparent;
+    //transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    //
+    //&--speaking {
+    //  border-color: #2196f3;
+    //  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3);
+    //}
   }
 
   &__feed {
     width: 100%;
     max-height: 100vh;
     object-fit: contain;
-    border-radius: 10px;
   }
 
   &__label {
-    position: absolute;
-    bottom: 12px;
-    left: 12px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 5px;
+    top: 5px;
     color: white;
-    padding: 4px 12px;
-    border-radius: 4px;
-    font-size: 0.875rem;
+    font-size: 0.8em;
     font-weight: 500;
+    left: 5px;
+    padding: 2px 4px;
+    position: absolute;
   }
 }
