@@ -1,5 +1,5 @@
 /* Empty center state when alone */
-.empty-center {
+.no-peers-placeholder {
   min-height: calc(100vh - 200px);
   display: flex;
   flex-direction: column;
@@ -8,16 +8,16 @@
   text-align: center;
   color: #999;
   padding: 24px;
-}
 
-.empty-center h2 {
-  margin: 0 0 8px 0;
-  color: #fff;
-  font-size: 1.25rem;
-}
+  & .room-id-hint {
+    color: #bdbdbd;
+  }
 
-.empty-center .room-id-hint {
-  color: #bdbdbd;
+  & h2 {
+    margin: 0 0 8px 0;
+    color: #fff;
+    font-size: 1.25rem;
+  }
 }
 
 /* Copy button and feedback */
@@ -37,4 +37,30 @@
   margin-left: 10px;
   color: #81c784;
   font-weight: 600;
+}
+
+
+.no-participants {
+  text-align: center;
+  padding: 24px 16px;
+  color: #999;
+}
+
+.no-participants p {
+  margin: 8px 0;
+  font-size: 0.9rem;
+}
+
+.room-id-hint {
+  font-size: 0.85rem;
+  margin-top: 16px;
+}
+
+.room-id-hint strong {
+  color: #4caf50;
+  font-family: monospace;
+  font-size: 1rem;
+  display: block;
+  margin-top: 4px;
+  word-break: break-all;
 }
