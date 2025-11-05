@@ -1,5 +1,7 @@
 import type { ChangeEvent } from "react";
 
+import "./Input.scss";
+
 interface InputProps {
   id: string;
   value: string;

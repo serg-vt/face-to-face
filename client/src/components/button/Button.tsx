@@ -1,3 +1,5 @@
+import "./Button.scss";
+
 interface ButtonProps {
   label: string;
   onClick?: () => void;

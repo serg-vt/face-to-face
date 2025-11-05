@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import cn from 'classnames';
+
+import Button from "../../components/button";
+import Input from "../../components/input";
+
 import './LandingPage.scss';
 
 const LandingPage = () => {
@@ -43,35 +47,26 @@ const LandingPage = () => {
 
   return (
     <div className="landing-page">
-      <div className="landing-content">
-        <div className="name-input-section">
-          <input
-            type="text"
-            id="user-name"
-            value={userName}
-            onChange={(e) => setUserName(e.target.value)}
-            placeholder="Enter your display name"
-            maxLength={50}
-            className="name-input"
-          />
-        </div>
+      <div className="landing-page__section">
+        <Input
+          id="user-name"
+          value={userName}
+          onChange={(e) => setUserName(e.target.value)}
+          placeholder="Enter your display name"
+        />
+      </div>
 
-        <div className="action-buttons">
-          <button
-            onClick={handleCreateMeeting}
-            className={cn('btn', 'btn-primary')}
-            disabled={!userName.trim()}
-          >
-            Create Meeting
-          </button>
-          <button
-            onClick={handleJoinMeeting}
-            className={cn('btn', 'btn-secondary')}
-            disabled={!userName.trim()}
-          >
-            Join Meeting
-          </button>
-        </div>
+      <div className="landing-page__section">
+        <Button
+          className={cn("landing-page__button", "landing-page__create-button")}
+          onClick={handleCreateMeeting}
+          label="Create meeting"
+        />
+        <Button
+          className={cn("landing-page__button", "landing-page__join-button")}
+          onClick={handleJoinMeeting}
+          label="Join meeting"
+        />
       </div>
     </div>
   );
