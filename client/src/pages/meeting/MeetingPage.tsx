@@ -10,6 +10,7 @@ interface PeerConnection {
   peer: RTCPeerConnection;
   stream?: MediaStream;
   isSpeaking?: boolean;
+  addedLocalTracks?: boolean; // whether we've already added local tracks to this peer
 }
 
 const MeetingPage = () => {
@@ -42,9 +43,11 @@ const MeetingPage = () => {
       return;
     }
 
-    // Initialize media first, then socket after media is ready
-    const init = async () => {
-      await initializeMedia();
+    // Initialize media in background and start socket immediately so user can join
+    const init = () => {
+      // Start media acquisition but don't block socket initialization
+      initializeMedia().catch((err) => console.warn('initializeMedia failed:', err));
+      // Initialize socket immediately so user can join even without media
       initializeSocket();
     };
 
@@ -74,11 +77,59 @@ const MeetingPage = () => {
       // Setup voice activity detection
       setupVoiceDetection(stream);
 
+      // Set initial enabled flags based on available tracks
+      setIsAudioEnabled(Boolean(stream.getAudioTracks().length && stream.getAudioTracks()[0].enabled));
+      setIsVideoEnabled(Boolean(stream.getVideoTracks().length && stream.getVideoTracks()[0].enabled));
+
       console.log('Media stream initialized, ready for peer connections');
+
+      // If peers already exist (we joined without media), attach local tracks to them now
+      addLocalTracksToPeers();
     } catch (error) {
-      console.error('Error accessing media devices:', error);
-      alert('Could not access camera/microphone. Please check permissions.');
+      // If user denied permissions or no devices available, allow joining without media
+      console.warn('Could not access media devices, joining without local media:', error);
+      localStreamRef.current = null;
+      setLocalStream(null);
+
+      // Ensure UI reflects no local media available
+      setIsAudioEnabled(false);
+      setIsVideoEnabled(false);
     }
+  };
+
+  // Attach local media tracks to any existing peer connections (used when media becomes available after joining)
+  const addLocalTracksToPeers = async () => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    if (!peersRef.current || peersRef.current.size === 0) return;
+
+    peersRef.current.forEach(async (peerConnection, userId) => {
+      try {
+        if (!peerConnection.addedLocalTracks) {
+          // Add all local tracks
+          stream.getTracks().forEach(track => {
+            peerConnection.peer.addTrack(track, stream);
+            console.log('Added late local track:', track.kind, 'to peer:', userId);
+          });
+
+          peerConnection.addedLocalTracks = true;
+
+          // Renegotiate: create an offer so remote peer will receive new tracks
+          if (socketRef.current) {
+            try {
+              const offer = await peerConnection.peer.createOffer();
+              await peerConnection.peer.setLocalDescription(offer);
+              socketRef.current.emit('offer', { offer, to: userId });
+              console.log('Sent renegotiation offer to', userId);
+            } catch (err) {
+              console.error('Error during renegotiation with', userId, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to add local tracks to peer', userId, err);
+      }
+    });
   };
 
   const setupVoiceDetection = (stream: MediaStream) => {
@@ -208,10 +259,6 @@ const MeetingPage = () => {
 
   const createPeerConnection = (userId: string, isInitiator: boolean) => {
     const stream = localStreamRef.current;
-    if (!stream) {
-      console.error('No local stream available for peer connection');
-      return;
-    }
 
     console.log('Creating peer connection to:', userId, 'isInitiator:', isInitiator);
     const peer = new RTCPeerConnection(iceServers);
@@ -226,11 +273,16 @@ const MeetingPage = () => {
       console.log('Connection state for', userId, ':', peer.connectionState);
     };
 
-    // Add local stream to peer connection
-    stream.getTracks().forEach(track => {
-      peer.addTrack(track, stream);
-      console.log('Added track:', track.kind, 'to peer connection');
-    });
+    // Add local stream to peer connection only if available
+    if (stream) {
+      stream.getTracks().forEach(track => {
+        peer.addTrack(track, stream);
+        console.log('Added track:', track.kind, 'to peer connection');
+      });
+      peerConnection.addedLocalTracks = true;
+    } else {
+      console.log('No local media available — creating receive-only peer connection');
+    }
 
     // Handle ICE candidates
     peer.onicecandidate = (event) => {
@@ -276,11 +328,8 @@ const MeetingPage = () => {
   };
 
   const handleOffer = async (offer: RTCSessionDescriptionInit, from: string) => {
+    // Note: allow creating peer connection even if no local stream
     const stream = localStreamRef.current;
-    if (!stream) {
-      console.error('No local stream available for handling offer');
-      return;
-    }
 
     console.log('Handling offer from:', from);
     const peer = new RTCPeerConnection(iceServers);
@@ -295,11 +344,16 @@ const MeetingPage = () => {
       console.log('Connection state for', from, ':', peer.connectionState);
     };
 
-    // Add local stream
-    stream.getTracks().forEach(track => {
-      peer.addTrack(track, stream);
-      console.log('Added track:', track.kind, 'for answering offer');
-    });
+    // Add local stream if available
+    if (stream) {
+      stream.getTracks().forEach(track => {
+        peer.addTrack(track, stream);
+        console.log('Added track:', track.kind, 'for answering offer');
+      });
+      peerConnection.addedLocalTracks = true;
+    } else {
+      console.log('No local media available when answering offer — creating receive-only connection');
+    }
 
     // Handle ICE candidates
     peer.onicecandidate = (event) => {
