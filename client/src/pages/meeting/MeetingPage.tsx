@@ -5,7 +5,7 @@ import { BsMicFill, BsMicMuteFill, BsCameraVideoFill, BsCameraVideoOffFill } fro
 import { MdCallEnd } from 'react-icons/md';
 import cn from 'classnames';
 import styles from './MeetingPage.module.scss';
-import useMedia from '../../hooks/useMedia';
+import useMedia, { startRemoteVoiceDetection } from '../../hooks/useMedia';
 
 interface PeerConnection {
   peer: RTCPeerConnection;
@@ -397,8 +397,6 @@ interface RemoteVideoProps {
 function RemoteVideo({ stream }: RemoteVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
 
   useEffect(() => {
     console.log('RemoteVideo mounted with stream:', stream);
@@ -409,63 +407,15 @@ function RemoteVideo({ stream }: RemoteVideoProps) {
       console.log('Set srcObject for remote video');
     }
 
-    // Setup voice detection for remote stream
-    setupRemoteVoiceDetection(stream);
+    // Use shared remote voice detection helper
+    const stop = startRemoteVoiceDetection(stream, (speaking) => {
+      setIsSpeaking(speaking);
+    });
 
     return () => {
-      // Cleanup audio context
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      try { stop(); } catch (err) { /* ignore */ }
     };
   }, [stream]);
-
-  const setupRemoteVoiceDetection = (remoteStream: MediaStream) => {
-    try {
-      const audioContext = new AudioContext();
-      const analyser = audioContext.createAnalyser();
-      const source = audioContext.createMediaStreamSource(remoteStream);
-
-      analyser.smoothingTimeConstant = 0.8;
-      analyser.fftSize = 1024;
-
-      source.connect(analyser);
-
-      audioContextRef.current = audioContext;
-      analyserRef.current = analyser;
-
-      detectRemoteVoiceActivity();
-    } catch (error) {
-      console.error('Error setting up remote voice detection:', error);
-    }
-  };
-
-  const detectRemoteVoiceActivity = () => {
-    if (!analyserRef.current) return;
-
-    const analyser = analyserRef.current;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    const checkAudioLevel = () => {
-      if (!analyserRef.current) return;
-
-      analyser.getByteFrequencyData(dataArray);
-
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-      }
-      const average = sum / bufferLength;
-
-      const threshold = 15;
-      setIsSpeaking(average > threshold);
-
-      requestAnimationFrame(checkAudioLevel);
-    };
-
-    checkAudioLevel();
-  };
 
   return (
     <div className={cn(styles['video-container'], { [styles.speaking]: isSpeaking })}>
@@ -480,4 +430,4 @@ function RemoteVideo({ stream }: RemoteVideoProps) {
   );
 }
 
-export default MeetingPage
+export default MeetingPage;

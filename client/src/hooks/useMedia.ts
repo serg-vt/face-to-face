@@ -326,3 +326,59 @@ export default function useMedia(): UseMediaResult {
   };
 }
 
+// Start voice-activity detection for a remote MediaStream. Returns a stop function to cancel monitoring and release resources.
+export function startRemoteVoiceDetection(remoteStream: MediaStream, onSpeakingChange: (speaking: boolean) => void): () => void {
+  if (!remoteStream) {
+    return () => {};
+  }
+
+  let audioContext: AudioContext | null = null;
+  let analyser: AnalyserNode | null = null;
+  let rafId: number | null = null;
+
+  try {
+    audioContext = new AudioContext();
+    analyser = audioContext.createAnalyser();
+    const source = audioContext.createMediaStreamSource(remoteStream);
+
+    analyser.smoothingTimeConstant = 0.8;
+    analyser.fftSize = 1024;
+
+    source.connect(analyser);
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const checkAudioLevel = () => {
+      if (!analyser) return;
+      analyser.getByteFrequencyData(dataArray);
+
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / bufferLength;
+      const threshold = 15; // same threshold used elsewhere
+      try {
+        onSpeakingChange(average > threshold);
+      } catch (err) {
+        console.error('Error in onSpeakingChange callback:', err);
+      }
+
+      rafId = requestAnimationFrame(checkAudioLevel);
+    };
+
+    checkAudioLevel();
+  } catch (err) {
+    console.error('startRemoteVoiceDetection failed:', err);
+  }
+
+  return () => {
+    if (rafId) cancelAnimationFrame(rafId);
+    if (audioContext) {
+      audioContext.close().catch(() => {});
+    }
+    audioContext = null;
+    analyser = null;
+  };
+}
