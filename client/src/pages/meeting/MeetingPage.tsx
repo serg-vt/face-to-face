@@ -5,6 +5,7 @@ import { BsMicFill, BsMicMuteFill, BsCameraVideoFill, BsCameraVideoOffFill } fro
 import { MdCallEnd } from 'react-icons/md';
 import cn from 'classnames';
 import styles from './MeetingPage.module.scss';
+import useMedia from '../../hooks/useMedia';
 
 interface PeerConnection {
   peer: RTCPeerConnection;
@@ -17,24 +18,28 @@ const MeetingPage = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const userName = sessionStorage.getItem('userName') || 'Guest';
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [peers, setPeers] = useState<Map<string, PeerConnection>>(new Map());
-  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Media hook - only pull what's needed here
+  const media = useMedia();
+  const { localStream, localStreamRef, isAudioEnabled, isVideoEnabled, isSpeaking, initializeMedia, toggleAudio, toggleVideo } = media;
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
 
   const iceServers = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' }
     ]
   };
+
+  // Attach the hook-provided localStream to the local preview element
+  useEffect(() => {
+    if (localVideoRef.current) {
+      (localVideoRef.current as HTMLVideoElement).srcObject = localStream || null;
+    }
+  }, [localStream]);
 
   useEffect(() => {
     // Redirect if no roomId
@@ -58,131 +63,6 @@ const MeetingPage = () => {
       cleanup();
     };
   }, [roomId, navigate]);
-
-  const initializeMedia = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-      });
-
-      // Store in ref immediately for peer connections
-      localStreamRef.current = stream;
-      setLocalStream(stream);
-
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-
-      // Setup voice activity detection
-      setupVoiceDetection(stream);
-
-      // Set initial enabled flags based on available tracks
-      setIsAudioEnabled(Boolean(stream.getAudioTracks().length && stream.getAudioTracks()[0].enabled));
-      setIsVideoEnabled(Boolean(stream.getVideoTracks().length && stream.getVideoTracks()[0].enabled));
-
-      console.log('Media stream initialized, ready for peer connections');
-
-      // If peers already exist (we joined without media), attach local tracks to them now
-      addLocalTracksToPeers();
-    } catch (error) {
-      // If user denied permissions or no devices available, allow joining without media
-      console.warn('Could not access media devices, joining without local media:', error);
-      localStreamRef.current = null;
-      setLocalStream(null);
-
-      // Ensure UI reflects no local media available
-      setIsAudioEnabled(false);
-      setIsVideoEnabled(false);
-    }
-  };
-
-  // Attach local media tracks to any existing peer connections (used when media becomes available after joining)
-  const addLocalTracksToPeers = async () => {
-    const stream = localStreamRef.current;
-    if (!stream) return;
-    if (!peersRef.current || peersRef.current.size === 0) return;
-
-    peersRef.current.forEach(async (peerConnection, userId) => {
-      try {
-        if (!peerConnection.addedLocalTracks) {
-          // Add all local tracks
-          stream.getTracks().forEach(track => {
-            peerConnection.peer.addTrack(track, stream);
-            console.log('Added late local track:', track.kind, 'to peer:', userId);
-          });
-
-          peerConnection.addedLocalTracks = true;
-
-          // Renegotiate: create an offer so remote peer will receive new tracks
-          if (socketRef.current) {
-            try {
-              const offer = await peerConnection.peer.createOffer();
-              await peerConnection.peer.setLocalDescription(offer);
-              socketRef.current.emit('offer', { offer, to: userId });
-              console.log('Sent renegotiation offer to', userId);
-            } catch (err) {
-              console.error('Error during renegotiation with', userId, err);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Failed to add local tracks to peer', userId, err);
-      }
-    });
-  };
-
-  const setupVoiceDetection = (stream: MediaStream) => {
-    try {
-      // Create audio context and analyser
-      const audioContext = new AudioContext();
-      const analyser = audioContext.createAnalyser();
-      const microphone = audioContext.createMediaStreamSource(stream);
-
-      analyser.smoothingTimeConstant = 0.8;
-      analyser.fftSize = 1024;
-
-      microphone.connect(analyser);
-
-      audioContextRef.current = audioContext;
-      analyserRef.current = analyser;
-
-      // Start monitoring audio levels
-      detectVoiceActivity();
-    } catch (error) {
-      console.error('Error setting up voice detection:', error);
-    }
-  };
-
-  const detectVoiceActivity = () => {
-    if (!analyserRef.current) return;
-
-    const analyser = analyserRef.current;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    const checkAudioLevel = () => {
-      if (!analyserRef.current) return;
-
-      analyser.getByteFrequencyData(dataArray);
-
-      // Calculate average volume
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-      }
-      const average = sum / bufferLength;
-
-      // Threshold for speaking detection (adjust as needed)
-      const threshold = 15;
-      setIsSpeaking(average > threshold);
-
-      // Continue monitoring
-      requestAnimationFrame(checkAudioLevel);
-    };
-
-    checkAudioLevel();
-  };
 
   const initializeSocket = () => {
     // In production (deployed), connect to same origin as the app
@@ -400,26 +280,6 @@ const MeetingPage = () => {
     }
   };
 
-  const toggleAudio = () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsAudioEnabled(audioTrack.enabled);
-      }
-    }
-  };
-
-  const toggleVideo = () => {
-    if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsVideoEnabled(videoTrack.enabled);
-      }
-    }
-  };
-
   const handleLeave = () => {
     cleanup();
     sessionStorage.removeItem('userName');
@@ -428,17 +288,10 @@ const MeetingPage = () => {
 
   const cleanup = () => {
     // Stop local stream
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
     }
     localStreamRef.current = null;
-
-    // Close audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    analyserRef.current = null;
 
     // Close all peer connections
     peersRef.current.forEach((peerConnection) => {
@@ -505,7 +358,7 @@ const MeetingPage = () => {
       <div className={styles['controls-toolbar']}>
         <button
           className={cn(styles['control-btn'], { [styles.disabled]: !isAudioEnabled || !localStream })}
-          onClick={toggleAudio}
+          onClick={() => toggleAudio()}
           title={!localStream ? 'No microphone available' : (isAudioEnabled ? 'Mute' : 'Unmute')}
           disabled={!localStream}
           aria-disabled={!localStream}
@@ -515,7 +368,7 @@ const MeetingPage = () => {
 
         <button
           className={cn(styles['control-btn'], { [styles.disabled]: !isVideoEnabled || !localStream })}
-          onClick={toggleVideo}
+          onClick={() => toggleVideo()}
           title={!localStream ? 'No camera available' : (isVideoEnabled ? 'Turn off camera' : 'Turn on camera')}
           disabled={!localStream}
           aria-disabled={!localStream}
@@ -627,4 +480,4 @@ function RemoteVideo({ stream }: RemoteVideoProps) {
   );
 }
 
-export default MeetingPage;
+export default MeetingPage
