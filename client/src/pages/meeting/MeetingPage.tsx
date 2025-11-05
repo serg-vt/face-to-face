@@ -504,17 +504,21 @@ const MeetingPage = () => {
       {/* Controls Toolbar */}
       <div className={styles['controls-toolbar']}>
         <button
-          className={cn(styles['control-btn'], { [styles.disabled]: !isAudioEnabled })}
+          className={cn(styles['control-btn'], { [styles.disabled]: !isAudioEnabled || !localStream })}
           onClick={toggleAudio}
-          title={isAudioEnabled ? 'Mute' : 'Unmute'}
+          title={!localStream ? 'No microphone available' : (isAudioEnabled ? 'Mute' : 'Unmute')}
+          disabled={!localStream}
+          aria-disabled={!localStream}
         >
           {isAudioEnabled ? <BsMicFill /> : <BsMicMuteFill />}
         </button>
 
         <button
-          className={cn(styles['control-btn'], { [styles.disabled]: !isVideoEnabled })}
+          className={cn(styles['control-btn'], { [styles.disabled]: !isVideoEnabled || !localStream })}
           onClick={toggleVideo}
-          title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
+          title={!localStream ? 'No camera available' : (isVideoEnabled ? 'Turn off camera' : 'Turn on camera')}
+          disabled={!localStream}
+          aria-disabled={!localStream}
         >
           {isVideoEnabled ? <BsCameraVideoFill /> : <BsCameraVideoOffFill />}
         </button>
