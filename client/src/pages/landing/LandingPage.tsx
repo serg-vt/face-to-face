@@ -8,7 +8,8 @@ const LandingPage = () => {
   const navigate = useNavigate();
 
   const generateRoomId = () => {
-    return Math.random().toString(36).substring(2, 10).toUpperCase();
+    // produce an 8-char lowercase alphanumeric id
+    return Math.random().toString(36).substring(2, 10).toLowerCase();
   };
 
   const handleCreateMeeting = () => {
@@ -35,8 +36,8 @@ const LandingPage = () => {
       // Store userName in sessionStorage
       sessionStorage.setItem('userName', userName.trim());
 
-      // Navigate to meeting page
-      navigate(`/meeting/${roomId.trim()}`);
+      // Normalize to lowercase for consistency
+      navigate(`/meeting/${roomId.trim().toLowerCase()}`);
     }
   };
 

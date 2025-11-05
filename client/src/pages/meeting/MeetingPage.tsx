@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
-import { BsMicFill, BsMicMuteFill, BsCameraVideoFill, BsCameraVideoOffFill } from 'react-icons/bs';
-import { MdCallEnd } from 'react-icons/md';
+import {
+  BsMicFill,
+  BsMicMuteFill,
+  BsCameraVideoFill,
+  BsCameraVideoOffFill,
+  BsTelephoneXFill
+} from 'react-icons/bs';
+import { FiCopy } from 'react-icons/fi';
 import cn from 'classnames';
 import styles from './MeetingPage.module.scss';
 import useMedia, { startRemoteVoiceDetection } from '../../hooks/useMedia';
@@ -12,13 +18,17 @@ interface PeerConnection {
   stream?: MediaStream;
   isSpeaking?: boolean;
   addedLocalTracks?: boolean; // whether we've already added local tracks to this peer
+  displayName?: string;
 }
 
 const MeetingPage = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
+  // Normalize roomId to lowercase for consistency (URLs may be uppercase)
+  const normalizedRoomId = roomId ? roomId.toLowerCase() : '';
   const userName = sessionStorage.getItem('userName') || 'Guest';
   const [peers, setPeers] = useState<Map<string, PeerConnection>>(new Map());
+  const [copied, setCopied] = useState(false);
 
   // Media hook - only pull what's needed here
   const media = useMedia();
@@ -48,12 +58,19 @@ const MeetingPage = () => {
       return;
     }
 
+    // If the provided roomId isn't already lowercase, navigate to the canonical lowercase URL
+    if (roomId && roomId !== normalizedRoomId) {
+      navigate(`/meeting/${normalizedRoomId}`, { replace: true });
+      return;
+    }
+
     // Initialize media in background and start socket immediately so user can join
     const init = () => {
       // Start media acquisition but don't block socket initialization
       initializeMedia().catch((err) => console.warn('initializeMedia failed:', err));
       // Initialize socket immediately so user can join even without media
       initializeSocket();
+      // send join with display name once socket connects (done inside initializeSocket)
     };
 
     init();
@@ -84,23 +101,38 @@ const MeetingPage = () => {
 
     socket.on('connect', () => {
       console.log('Connected to server:', socket.id);
-      socket.emit('join-room', roomId);
+      // Send both roomId and display name
+      socket.emit('join-room', { roomId: normalizedRoomId, name: userName });
     });
 
-    socket.on('existing-users', (users: string[]) => {
-      console.log('Existing users in room:', users);
-      // New joiner initiates connections to all existing users
-      users.forEach(userId => {
-        console.log('Initiating connection to existing user:', userId);
-        createPeerConnection(userId, true);
+    // Handle existing users (array of {id,name})
+    socket.on('existing-users', (users: Array<{id:string,name:string}>) => {
+      console.log('Existing users in room (with names):', users);
+      // For each existing user, create peer connection (we are the new joiner)
+      users.forEach(u => {
+        // create connection (initiator) and then store display name on the peer entry
+        createPeerConnection(u.id, true);
+        const pc = peersRef.current.get(u.id);
+        if (pc) {
+          pc.displayName = u.name || 'Participant';
+          peersRef.current.set(u.id, pc);
+        }
       });
+      setPeers(new Map(peersRef.current));
     });
 
-    socket.on('user-connected', (userId: string) => {
-      console.log('User connected:', userId);
-      // Existing user does NOT initiate - will receive offer from new user
-      // Just log, peer connection will be created when offer arrives
-      console.log('New user joined, waiting for their offer');
+    socket.on('user-connected', (payload: { id: string; name?: string }) => {
+      console.log('User connected payload:', payload);
+      const { id, name } = payload;
+      // Create receive-only peer entry (we will get their offer)
+      createPeerConnection(id, false);
+      // store name in the peer entry if available
+      const pc = peersRef.current.get(id);
+      if (pc) {
+        pc.displayName = name || 'Participant';
+        peersRef.current.set(id, pc);
+        setPeers(new Map(peersRef.current));
+      }
     });
 
     socket.on('offer', async ({ offer, from }: { offer: RTCSessionDescriptionInit; from: string }) => {
@@ -300,8 +332,8 @@ const MeetingPage = () => {
     peersRef.current.clear();
 
     // Disconnect socket
-    if (socketRef.current && roomId) {
-      socketRef.current.emit('leave-room', roomId);
+    if (socketRef.current && normalizedRoomId) {
+      socketRef.current.emit('leave-room', normalizedRoomId);
       socketRef.current.disconnect();
     }
   };
@@ -310,36 +342,61 @@ const MeetingPage = () => {
     <div className={styles['meeting-page']}>
       {/* Main content area */}
       <div className={styles['meeting-content']}>
-        {/* Left sidebar with participants */}
-        <div className={styles['participants-sidebar']}>
-          <h3 className={styles['sidebar-title']}>Participants ({peers.size + 1})</h3>
-          <div className={styles['participants-list']}>
-            {/* Remote Videos */}
-            {peers.size === 0 ? (
-              <div className={styles['no-participants']}>
-                <p>Waiting for others to join...</p>
-                <p className={styles['room-id-hint']}>Share room ID: <strong>{roomId}</strong></p>
-              </div>
-            ) : (
-              Array.from(peers.entries()).map(([userId, peerConnection]) => {
-                console.log('Rendering peer:', userId, 'has stream:', !!peerConnection.stream);
-                return peerConnection.stream ? (
-                  <RemoteVideo
-                    key={userId}
-                    stream={peerConnection.stream}
-                  />
-                ) : (
-                  <div key={userId} className={styles['video-container']}>
-                    <div className={styles['video-label']}>Connecting...</div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Main meeting area */}
+        {/* Main meeting area now contains participants grid (mobile-first) */}
         <div className={styles['main-meeting-area']}>
+          {peers.size === 0 ? (
+            <div className={styles['empty-center']}>
+              <h2>Waiting for others to join...</h2>
+              <p className={styles['room-id-hint']}>Room ID: <strong>{normalizedRoomId || roomId}</strong></p>
+              <div style={{marginTop:12}}>
+                <button
+                  className={styles['copy-btn']}
+                  onClick={async () => {
+                    try {
+                      const toCopy = normalizedRoomId || roomId || '';
+                      if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(toCopy);
+                      } else {
+                        // fallback
+                        const el = document.createElement('textarea');
+                        el.value = toCopy;
+                        document.body.appendChild(el);
+                        el.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(el);
+                      }
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1500);
+                    } catch (err) {
+                      console.error('Copy failed', err);
+                    }
+                  }}
+                  aria-label="Copy room ID"
+                >
+                  <FiCopy style={{ marginRight: 8 }} />
+                  Copy Room ID
+                </button>
+                {copied && <span className={styles['copied-feedback']}>Copied!</span>}
+              </div>
+            </div>
+          ) : (
+            <div className={styles['participants-grid']}>
+              {Array.from(peers.entries()).map(([userId, peerConnection]) => (
+                peerConnection.stream ? (
+                  <div key={userId} className={styles['grid-item']}>
+                    <RemoteVideo stream={peerConnection.stream} displayName={peerConnection.displayName} />
+                  </div>
+                ) : (
+                  <div key={userId} className={styles['grid-item']}>
+                    <div className={styles['video-container']}>
+                      <div className={styles['video-label']}>Connecting...</div>
+                    </div>
+                  </div>
+                )
+              ))}
+            </div>
+          )}
+
           {/* Local Video - Bottom Right */}
           <div className={cn(styles['local-video-container'], { [styles.speaking]: isSpeaking })}>
             <video
@@ -380,9 +437,9 @@ const MeetingPage = () => {
           className={cn(styles['control-btn'], styles['leave-btn'])}
           onClick={handleLeave}
           title="Leave call"
+          aria-label="Leave call"
         >
-          <MdCallEnd />
-          <span>Leave Call</span>
+          <BsTelephoneXFill size="30px" />
         </button>
       </div>
     </div>
@@ -392,9 +449,10 @@ const MeetingPage = () => {
 // Remote Video Component
 interface RemoteVideoProps {
   stream: MediaStream;
+  displayName?: string;
 }
 
-function RemoteVideo({ stream }: RemoteVideoProps) {
+function RemoteVideo({ stream, displayName }: RemoteVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -425,7 +483,7 @@ function RemoteVideo({ stream }: RemoteVideoProps) {
         playsInline
         className={styles.video}
       />
-      <div className={styles['video-label']}>Participant</div>
+      {displayName && <div className={styles['video-label']}>{displayName}</div>}
     </div>
   );
 }

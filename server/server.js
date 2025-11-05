@@ -62,31 +62,39 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client')));
 }
 
+// rooms: Map<roomId, Map<socketId, displayName>>
 const rooms = new Map();
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  socket.on('join-room', (roomId) => {
+  // Expect join payload { roomId, name }
+  socket.on('join-room', (payload) => {
+    const { roomId: rawRoomId, name } = (typeof payload === 'string') ? { roomId: payload, name: 'Guest' } : payload || {};
+    if (!rawRoomId) return;
+    const roomId = String(rawRoomId).toLowerCase();
+
     socket.join(roomId);
 
     if (!rooms.has(roomId)) {
-      rooms.set(roomId, new Set());
+      rooms.set(roomId, new Map());
     }
 
-    // Get existing users in the room before adding new user
-    const existingUsers = Array.from(rooms.get(roomId) || []);
+    const roomMap = rooms.get(roomId);
 
-    // Add new user to room
-    rooms.get(roomId).add(socket.id);
+    // Prepare existing users list (array of { id, name }) before adding the new user
+    const existingUsers = Array.from(roomMap.entries()).map(([id, displayName]) => ({ id, name: displayName }));
+
+    // Add/replace this socket's display name in the room map
+    roomMap.set(socket.id, name || 'Guest');
 
     // Send list of existing users to the new joiner
     socket.emit('existing-users', existingUsers);
 
-    // Notify others in room about new user
-    socket.to(roomId).emit('user-connected', socket.id);
+    // Notify others in room about the new user (send { id, name })
+    socket.to(roomId).emit('user-connected', { id: socket.id, name: name || 'Guest' });
 
-    console.log(`User ${socket.id} joined room ${roomId}. Existing users:`, existingUsers);
+    console.log(`User ${socket.id} (${name}) joined room ${roomId}. Existing users:`, existingUsers);
   });
 
   socket.on('offer', (data) => {
@@ -113,7 +121,8 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('leave-room', (roomId) => {
+  socket.on('leave-room', (rawRoomId) => {
+    const roomId = String(rawRoomId || '').toLowerCase();
     socket.leave(roomId);
     if (rooms.has(roomId)) {
       rooms.get(roomId).delete(socket.id);
@@ -123,9 +132,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    rooms.forEach((users, roomId) => {
-      if (users.has(socket.id)) {
-        users.delete(socket.id);
+    rooms.forEach((usersMap, roomId) => {
+      if (usersMap.has(socket.id)) {
+        usersMap.delete(socket.id);
         socket.to(roomId).emit('user-disconnected', socket.id);
       }
     });
@@ -137,4 +146,3 @@ const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
-
