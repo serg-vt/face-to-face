@@ -1,17 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
-import {
-  BsMicFill,
-  BsMicMuteFill,
-  BsCameraVideoFill,
-  BsCameraVideoOffFill,
-  BsTelephoneXFill
-} from 'react-icons/bs';
 import { FiCopy } from 'react-icons/fi';
 import cn from 'classnames';
 import styles from './MeetingPage.module.scss';
 import useMedia, { startRemoteVoiceDetection } from '../../hooks/useMedia';
+import Controls from "../../components/controls";
 
 interface PeerConnection {
   peer: RTCPeerConnection;
@@ -31,8 +25,16 @@ const MeetingPage = () => {
   const [copied, setCopied] = useState(false);
 
   // Media hook - only pull what's needed here
-  const media = useMedia();
-  const { localStream, localStreamRef, isAudioEnabled, isVideoEnabled, isSpeaking, initializeMedia, toggleAudio, toggleVideo } = media;
+  const {
+    localStream,
+    localStreamRef,
+    isAudioEnabled,
+    isVideoEnabled,
+    isSpeaking,
+    initializeMedia,
+    toggleAudio,
+    toggleVideo
+  } = useMedia();
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -340,9 +342,7 @@ const MeetingPage = () => {
 
   return (
     <div className={styles['meeting-page']}>
-      {/* Main content area */}
       <div className={styles['meeting-content']}>
-        {/* Main meeting area now contains participants grid (mobile-first) */}
         <div className={styles['main-meeting-area']}>
           {peers.size === 0 ? (
             <div className={styles['empty-center']}>
@@ -411,37 +411,14 @@ const MeetingPage = () => {
         </div>
       </div>
 
-      {/* Controls Toolbar */}
-      <div className={styles['controls-toolbar']}>
-        <button
-          className={cn(styles['control-btn'], { [styles.disabled]: !isAudioEnabled || !localStream })}
-          onClick={() => toggleAudio()}
-          title={!localStream ? 'No microphone available' : (isAudioEnabled ? 'Mute' : 'Unmute')}
-          disabled={!localStream}
-          aria-disabled={!localStream}
-        >
-          {isAudioEnabled ? <BsMicFill /> : <BsMicMuteFill />}
-        </button>
-
-        <button
-          className={cn(styles['control-btn'], { [styles.disabled]: !isVideoEnabled || !localStream })}
-          onClick={() => toggleVideo()}
-          title={!localStream ? 'No camera available' : (isVideoEnabled ? 'Turn off camera' : 'Turn on camera')}
-          disabled={!localStream}
-          aria-disabled={!localStream}
-        >
-          {isVideoEnabled ? <BsCameraVideoFill /> : <BsCameraVideoOffFill />}
-        </button>
-
-        <button
-          className={cn(styles['control-btn'], styles['leave-btn'])}
-          onClick={handleLeave}
-          title="Leave call"
-          aria-label="Leave call"
-        >
-          <BsTelephoneXFill size="30px" />
-        </button>
-      </div>
+      <Controls
+        isAudioEnabled={isAudioEnabled}
+        isVideoEnabled={isVideoEnabled}
+        localStream={localStream}
+        toggleAudio={toggleAudio}
+        toggleVideo={toggleVideo}
+        handleLeave={handleLeave}
+      />
     </div>
   );
 }
