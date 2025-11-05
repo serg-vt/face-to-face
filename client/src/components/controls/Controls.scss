@@ -1,0 +1,65 @@
+$background-color-on: #444;
+$icon-color-on: #fff;
+
+$background-color-off: #a32020;
+$icon-color-off: #fff;
+
+$color-disabled: #a5a5a5;
+
+$controls-background: #333;
+
+.controls {
+  background-color: $controls-background;
+  border-radius: 10px;
+  display: flex;
+  padding: 10px;
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 20px);
+  justify-content: space-between;
+
+  &__left {
+    display: flex;
+    gap: 10px;
+  }
+
+  &__right {
+    display: flex;
+  }
+
+  &__mic-button {
+    background-color: $background-color-on;
+    color: $icon-color-on;
+
+    &--off {
+      background-color: $background-color-off;
+      color: $icon-color-off;
+    }
+
+    &--disabled {
+      background-color: $color-disabled;
+    }
+  }
+
+  &__video-button {
+    background-color: $background-color-on;
+    color: $icon-color-on;
+
+    &--off {
+      background-color: $background-color-off;
+      color: $icon-color-off;
+    }
+
+    &--disabled {
+      background-color: $color-disabled;
+    }
+  }
+
+  &__leave-button {
+    background-color: $background-color-off;
+    color: $icon-color-off;
+    width: 80px;
+  }
+}
