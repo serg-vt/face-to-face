@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
-import { FiCopy } from 'react-icons/fi';
 
 import useMedia from '../../hooks/useMedia';
 
@@ -10,6 +9,7 @@ import RemoteVideo from "../../components/remoteVideo";
 import LocalVideo from "../../components/localVideo";
 
 import './MeetingPage.scss';
+import NoPeersPlaceholder from "../../components/noPeersPlaceholder";
 
 interface PeerConnection {
   peer: RTCPeerConnection;
@@ -26,7 +26,6 @@ const MeetingPage = () => {
   const normalizedRoomId = roomId ? roomId.toLowerCase() : '';
   const userName = sessionStorage.getItem('userName') || 'Guest';
   const [peers, setPeers] = useState<Map<string, PeerConnection>>(new Map());
-  const [copied, setCopied] = useState(false);
 
   // Media hook - only pull what's needed here
   const {
@@ -349,40 +348,10 @@ const MeetingPage = () => {
       <div className="meeting-content">
         <div className="main-meeting-area">
           {peers.size === 0 ? (
-            <div className="empty-center">
-              <h2>Waiting for others to join...</h2>
-              <p className="room-id-hint">Room ID: <strong>{normalizedRoomId || roomId}</strong></p>
-              <div style={{marginTop:12}}>
-                <button
-                  className="copy-btn"
-                  onClick={async () => {
-                    try {
-                      const toCopy = normalizedRoomId || roomId || '';
-                      if (navigator.clipboard && navigator.clipboard.writeText) {
-                        await navigator.clipboard.writeText(toCopy);
-                      } else {
-                        // fallback
-                        const el = document.createElement('textarea');
-                        el.value = toCopy;
-                        document.body.appendChild(el);
-                        el.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(el);
-                      }
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1500);
-                    } catch (err) {
-                      console.error('Copy failed', err);
-                    }
-                  }}
-                  aria-label="Copy room ID"
-                >
-                  <FiCopy style={{ marginRight: 8 }} />
-                  Copy Room ID
-                </button>
-                {copied && <span className="copied-feedback">Copied!</span>}
-              </div>
-            </div>
+            <NoPeersPlaceholder
+              roomId={roomId || ''}
+              normalizedRoomId={normalizedRoomId}
+            />
           ) : (
             <div className="participants-grid">
               {Array.from(peers.entries()).map(([userId, peerConnection]) => (
