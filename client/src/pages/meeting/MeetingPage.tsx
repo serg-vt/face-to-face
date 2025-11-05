@@ -1,12 +1,13 @@
-import cn from 'classnames';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { FiCopy } from 'react-icons/fi';
 
-import useMedia, { startRemoteVoiceDetection } from '../../hooks/useMedia';
+import useMedia from '../../hooks/useMedia';
 
 import Controls from "../../components/controls";
+import RemoteVideo from "../../components/remoteVideo";
+import LocalVideo from "../../components/localVideo";
 
 import './MeetingPage.scss';
 
@@ -387,7 +388,10 @@ const MeetingPage = () => {
               {Array.from(peers.entries()).map(([userId, peerConnection]) => (
                 peerConnection.stream ? (
                   <div key={userId} className="grid-item">
-                    <RemoteVideo stream={peerConnection.stream} displayName={peerConnection.displayName} />
+                    <RemoteVideo
+                      stream={peerConnection.stream}
+                      displayName={peerConnection.displayName}
+                    />
                   </div>
                 ) : (
                   <div key={userId} className="grid-item">
@@ -400,17 +404,11 @@ const MeetingPage = () => {
             </div>
           )}
 
-          {/* Local Video - Bottom Right */}
-          <div className={cn('local-video-container', { speaking: isSpeaking })}>
-            <video
-              ref={localVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="local-video"
-            />
-            <div className="video-label">You ({userName})</div>
-          </div>
+          <LocalVideo
+            localVideoRef={localVideoRef}
+            userName={userName}
+            isSpeaking={isSpeaking}
+          />
         </div>
       </div>
 
@@ -422,48 +420,6 @@ const MeetingPage = () => {
         toggleVideo={toggleVideo}
         handleLeave={handleLeave}
       />
-    </div>
-  );
-}
-
-// Remote Video Component
-interface RemoteVideoProps {
-  stream: MediaStream;
-  displayName?: string;
-}
-
-function RemoteVideo({ stream, displayName }: RemoteVideoProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-
-  useEffect(() => {
-    console.log('RemoteVideo mounted with stream:', stream);
-    console.log('Stream tracks:', stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
-
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-      console.log('Set srcObject for remote video');
-    }
-
-    // Use shared remote voice detection helper
-    const stop = startRemoteVoiceDetection(stream, (speaking) => {
-      setIsSpeaking(speaking);
-    });
-
-    return () => {
-      try { stop(); } catch (err) { /* ignore */ }
-    };
-  }, [stream]);
-
-  return (
-    <div className={cn('video-container', { speaking: isSpeaking })}>
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        className="video"
-      />
-      {displayName && <div className="video-label">{displayName}</div>}
     </div>
   );
 }
