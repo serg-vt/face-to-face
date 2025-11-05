@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LandingPage.css';
 
-function LandingPage() {
+const LandingPage = () => {
   const [userName, setUserName] = useState('');
   const navigate = useNavigate();
 

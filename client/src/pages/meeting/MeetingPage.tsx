@@ -11,7 +11,7 @@ interface PeerConnection {
   isSpeaking?: boolean;
 }
 
-function MeetingPage() {
+const MeetingPage = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const userName = sessionStorage.getItem('userName') || 'Guest';
