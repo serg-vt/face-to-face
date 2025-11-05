@@ -22,11 +22,6 @@ const MeetingPage = () => {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [mediaError, setMediaError] = useState<string | null>(null);
-  const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState<string | null>(null);
-  const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState<string | null>(null);
-  const [permissionStatus, setPermissionStatus] = useState<{ camera?: string; microphone?: string }>({});
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -64,115 +59,13 @@ const MeetingPage = () => {
     };
   }, [roomId, navigate]);
 
-  // Reusable helper to try getUserMedia with given constraints
-  const tryGetUserMedia = async (constraints: MediaStreamConstraints) => {
-    try {
-      console.log('Attempting getUserMedia with constraints:', constraints);
-      const s = await navigator.mediaDevices.getUserMedia(constraints as MediaStreamConstraints);
-      return { stream: s as MediaStream, error: null };
-    } catch (err: any) {
-      console.warn('getUserMedia failed for constraints', constraints, 'error:', err && err.name ? `${err.name}: ${err.message}` : err);
-      return { stream: null, error: err };
-    }
-  };
-
-  // Query permissions (where supported) to give user feedback
-  const updatePermissionStatus = async () => {
-    try {
-      if ((navigator as any).permissions && (navigator as any).permissions.query) {
-        const cameraPerm = await (navigator as any).permissions.query({ name: 'camera' });
-        const micPerm = await (navigator as any).permissions.query({ name: 'microphone' });
-        setPermissionStatus({ camera: cameraPerm.state, microphone: micPerm.state });
-        cameraPerm.onchange = () => setPermissionStatus(prev => ({ ...prev, camera: (cameraPerm as any).state }));
-        micPerm.onchange = () => setPermissionStatus(prev => ({ ...prev, microphone: (micPerm as any).state }));
-      }
-    } catch (err) {
-      // Permissions API not supported in all browsers
-      console.warn('Permissions API not available:', err);
-    }
-  };
-
   const initializeMedia = async () => {
-    setMediaError(null);
-    // update permission status so UI shows current state
-    updatePermissionStatus();
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      const msg = 'getUserMedia not supported or not in secure context (https/localhost)';
-      console.warn(msg);
-      setMediaError(msg);
-      localStreamRef.current = null;
-      setLocalStream(null);
-      setIsAudioEnabled(false);
-      setIsVideoEnabled(false);
-      return;
-    }
-
-    // Enumerate devices first for debugging purposes
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      setAvailableDevices(devices);
-      console.log('Available media devices:', devices);
-    } catch (err) {
-      console.warn('Error enumerating devices:', err);
-    }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
 
-    // 1) If user previously selected specific devices, try them first
-    let stream: MediaStream | null = null;
-    let lastError: any = null;
-    if (selectedAudioDeviceId || selectedVideoDeviceId) {
-      const constraints: MediaStreamConstraints = {
-        audio: selectedAudioDeviceId ? { deviceId: { exact: selectedAudioDeviceId } } : true,
-        video: selectedVideoDeviceId ? { deviceId: { exact: selectedVideoDeviceId } } : true
-      };
-      const res = await tryGetUserMedia(constraints);
-      stream = res.stream;
-      lastError = res.error || lastError;
-    }
-
-    // 2) Try combined audio+video
-    if (!stream) {
-      const res = await tryGetUserMedia({ video: true, audio: true });
-      stream = res.stream;
-      lastError = res.error || lastError;
-    }
-
-    // 3) If failed, try audio-only then video-only (useful when one device is blocked)
-    if (!stream) {
-      const res = await tryGetUserMedia({ audio: true });
-      stream = res.stream;
-      lastError = res.error || lastError;
-      if (stream) console.log('Fell back to audio-only stream');
-    }
-
-    if (!stream) {
-      const res = await tryGetUserMedia({ video: true });
-      stream = res.stream;
-      lastError = res.error || lastError;
-      if (stream) console.log('Fell back to video-only stream');
-    }
-
-    // 3) If still no stream but devices exist, try explicit deviceId constraints (first available devices)
-    if (!stream && availableDevices && availableDevices.length > 0) {
-      const audioInput = availableDevices.find(d => d.kind === 'audioinput');
-      const videoInput = availableDevices.find(d => d.kind === 'videoinput');
-
-      if (audioInput) {
-        const res = await tryGetUserMedia({ audio: { deviceId: { exact: audioInput.deviceId } } });
-        stream = res.stream;
-        lastError = res.error || lastError;
-        if (stream) console.log('Succeeded with audio deviceId constraint', audioInput.deviceId);
-      }
-
-      if (!stream && videoInput) {
-        const res = await tryGetUserMedia({ video: { deviceId: { exact: videoInput.deviceId } } });
-        stream = res.stream;
-        lastError = res.error || lastError;
-        if (stream) console.log('Succeeded with video deviceId constraint', videoInput.deviceId);
-      }
-    }
-
-    if (stream) {
       // Store in ref immediately for peer connections
       localStreamRef.current = stream;
       setLocalStream(stream);
@@ -192,38 +85,13 @@ const MeetingPage = () => {
 
       // If peers already exist (we joined without media), attach local tracks to them now
       addLocalTracksToPeers();
-      setMediaError(null);
-    } else {
-      // All attempts failed — map common errors to friendly messages and show diagnostics
-      const errType = lastError && lastError.name ? lastError.name : 'UnknownError';
-      let friendly = 'Unable to acquire camera/microphone.';
-      switch (errType) {
-        case 'NotAllowedError':
-        case 'PermissionDeniedError':
-          friendly = 'Permissions denied. Please allow camera and microphone access in your browser for this site.';
-          break;
-        case 'NotFoundError':
-        case 'DevicesNotFoundError':
-          friendly = "No camera or microphone found. Make sure devices are connected and drivers are installed.";
-          break;
-        case 'NotReadableError':
-        case 'TrackStartError':
-          friendly = 'Device is already in use by another application or cannot be started. Close other apps (Zoom/Teams/OBS) and retry.';
-          break;
-        case 'OverconstrainedError':
-        case 'ConstraintNotSatisfiedError':
-          friendly = 'Requested device constraints cannot be satisfied. Try selecting a different device or use default settings.';
-          break;
-        default:
-          friendly = 'Unable to access media devices. Check browser permissions, OS privacy settings, and whether another app is using the device.';
-      }
-
-      console.warn('Media init failed:', { errType, lastError, availableDevices });
-      // Surface a concise friendly message to the user; full error shown in console
-      setMediaError(`${friendly} (${errType}${lastError && lastError.message ? ': ' + lastError.message : ''})`);
-
+    } catch (error) {
+      // If user denied permissions or no devices available, allow joining without media
+      console.warn('Could not access media devices, joining without local media:', error);
       localStreamRef.current = null;
       setLocalStream(null);
+
+      // Ensure UI reflects no local media available
       setIsAudioEnabled(false);
       setIsVideoEnabled(false);
     }
@@ -585,134 +453,178 @@ const MeetingPage = () => {
     }
   };
 
-  // Allow user to retry with selected device IDs from the UI
-  const retryWithSelectedDevices = async () => {
-    setMediaError(null);
-    await updatePermissionStatus();
-    // Re-enumerate devices before retry
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      setAvailableDevices(devices);
-    } catch (err) {
-      console.warn('Error enumerating devices before retry:', err);
+  return (
+    <div className={styles['meeting-page']}>
+      {/* Main content area */}
+      <div className={styles['meeting-content']}>
+        {/* Left sidebar with participants */}
+        <div className={styles['participants-sidebar']}>
+          <h3 className={styles['sidebar-title']}>Participants ({peers.size + 1})</h3>
+          <div className={styles['participants-list']}>
+            {/* Remote Videos */}
+            {peers.size === 0 ? (
+              <div className={styles['no-participants']}>
+                <p>Waiting for others to join...</p>
+                <p className={styles['room-id-hint']}>Share room ID: <strong>{roomId}</strong></p>
+              </div>
+            ) : (
+              Array.from(peers.entries()).map(([userId, peerConnection]) => {
+                console.log('Rendering peer:', userId, 'has stream:', !!peerConnection.stream);
+                return peerConnection.stream ? (
+                  <RemoteVideo
+                    key={userId}
+                    stream={peerConnection.stream}
+                  />
+                ) : (
+                  <div key={userId} className={styles['video-container']}>
+                    <div className={styles['video-label']}>Connecting...</div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Main meeting area */}
+        <div className={styles['main-meeting-area']}>
+          {/* Local Video - Bottom Right */}
+          <div className={cn(styles['local-video-container'], { [styles.speaking]: isSpeaking })}>
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={styles['local-video']}
+            />
+            <div className={styles['video-label']}>You ({userName})</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Controls Toolbar */}
+      <div className={styles['controls-toolbar']}>
+        <button
+          className={cn(styles['control-btn'], { [styles.disabled]: !isAudioEnabled || !localStream })}
+          onClick={toggleAudio}
+          title={!localStream ? 'No microphone available' : (isAudioEnabled ? 'Mute' : 'Unmute')}
+          disabled={!localStream}
+          aria-disabled={!localStream}
+        >
+          {isAudioEnabled ? <BsMicFill /> : <BsMicMuteFill />}
+        </button>
+
+        <button
+          className={cn(styles['control-btn'], { [styles.disabled]: !isVideoEnabled || !localStream })}
+          onClick={toggleVideo}
+          title={!localStream ? 'No camera available' : (isVideoEnabled ? 'Turn off camera' : 'Turn on camera')}
+          disabled={!localStream}
+          aria-disabled={!localStream}
+        >
+          {isVideoEnabled ? <BsCameraVideoFill /> : <BsCameraVideoOffFill />}
+        </button>
+
+        <button
+          className={cn(styles['control-btn'], styles['leave-btn'])}
+          onClick={handleLeave}
+          title="Leave call"
+        >
+          <MdCallEnd />
+          <span>Leave Call</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Remote Video Component
+interface RemoteVideoProps {
+  stream: MediaStream;
+}
+
+function RemoteVideo({ stream }: RemoteVideoProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+
+  useEffect(() => {
+    console.log('RemoteVideo mounted with stream:', stream);
+    console.log('Stream tracks:', stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
+
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      console.log('Set srcObject for remote video');
     }
 
-    const constraints: MediaStreamConstraints = {
-      audio: selectedAudioDeviceId ? { deviceId: { exact: selectedAudioDeviceId } } : true,
-      video: selectedVideoDeviceId ? { deviceId: { exact: selectedVideoDeviceId } } : true
-    };
+    // Setup voice detection for remote stream
+    setupRemoteVoiceDetection(stream);
 
-    const res = await tryGetUserMedia(constraints);
-    const s = res.stream;
-    const err = res.error;
-    if (s) {
-      // attach stream
-      localStreamRef.current = s;
-      setLocalStream(s);
-      if (localVideoRef.current) localVideoRef.current.srcObject = s;
-      setupVoiceDetection(s);
-      setIsAudioEnabled(Boolean(s.getAudioTracks().length && s.getAudioTracks()[0].enabled));
-      setIsVideoEnabled(Boolean(s.getVideoTracks().length && s.getVideoTracks()[0].enabled));
-      addLocalTracksToPeers();
-      setMediaError(null);
-    } else {
-      const errName = err && err.name ? `${err.name}: ` : '';
-      setMediaError(`${errName}${err && err.message ? err.message : 'Retry failed. Check device selection and permissions.'}`);
+    return () => {
+      // Cleanup audio context
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, [stream]);
+
+  const setupRemoteVoiceDetection = (remoteStream: MediaStream) => {
+    try {
+      const audioContext = new AudioContext();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(remoteStream);
+
+      analyser.smoothingTimeConstant = 0.8;
+      analyser.fftSize = 1024;
+
+      source.connect(analyser);
+
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+
+      detectRemoteVoiceActivity();
+    } catch (error) {
+      console.error('Error setting up remote voice detection:', error);
     }
   };
 
-  return (
-    <div className={styles.meetingPage}>
-      <div className={cn(styles.videoContainer, { [styles.speaking]: isSpeaking })}>
-        <video
-          ref={localVideoRef}
-          className={cn(styles.video, styles.localVideo)}
-          autoPlay
-          muted
-        />
-        {Array.from(peers.keys()).map(userId => {
-          const peer = peers.get(userId);
-           return (
-             <div key={userId} className={cn(styles.remoteVideoWrapper, { [styles.hidden]: !peer?.stream })}>
-               <video
-                 className={cn(styles.video, styles.remoteVideo)}
-                 autoPlay
-                 ref={ref => {
-                   if (ref && peer?.stream) {
-                     ref.srcObject = peer.stream;
-                   }
-                 }}
-               />
-               {/* Debug info */}
-               <div className={styles.debugInfo}>
-                 <div>User ID: {userId}</div>
-                 <div>Connection State: {peer?.peer.connectionState}</div>
-                 <div>ICE State: {peer?.peer.iceConnectionState}</div>
-                 <div>Tracks: {peer?.stream?.getTracks().map(track => track.kind).join(', ')}</div>
-               </div>
-             </div>
-           );
-         })}
-       </div>
-       <div className={styles.controls}>
-        <div className={styles.youLabel}>You: {userName}</div>
-         <div className={styles.deviceSelectors}>
-           <div className={styles.selectWrapper}>
-             <label>Audio Device:</label>
-             <select
-               value={selectedAudioDeviceId || ''}
-               onChange={e => setSelectedAudioDeviceId(e.target.value)}
-               disabled={!availableDevices.length}
-             >
-               <option value="">Default</option>
-               {availableDevices.filter(device => device.kind === 'audioinput').map(device => (
-                 <option key={device.deviceId} value={device.deviceId}>
-                   {device.label || `Microphone ${device.deviceId}`}
-                 </option>
-               ))}
-             </select>
-           </div>
-           <div className={styles.selectWrapper}>
-             <label>Video Device:</label>
-             <select
-               value={selectedVideoDeviceId || ''}
-               onChange={e => setSelectedVideoDeviceId(e.target.value)}
-               disabled={!availableDevices.length}
-             >
-               <option value="">Default</option>
-               {availableDevices.filter(device => device.kind === 'videoinput').map(device => (
-                 <option key={device.deviceId} value={device.deviceId}>
-                   {device.label || `Camera ${device.deviceId}`}
-                 </option>
-               ))}
-             </select>
-           </div>
-         </div>
-         <div className={styles.buttons}>
-           <button onClick={toggleAudio} className={styles.toggleButton}>
-             {isAudioEnabled ? <BsMicFill /> : <BsMicMuteFill />}
-           </button>
-           <button onClick={toggleVideo} className={styles.toggleButton}>
-             {isVideoEnabled ? <BsCameraVideoFill /> : <BsCameraVideoOffFill />}
-           </button>
-           <button onClick={handleLeave} className={styles.leaveButton}>
-             <MdCallEnd />
-           </button>
-         </div>
-         <div className={styles.permissionStatus} style={{marginTop:8,fontSize:12,color:'#666'}}>
-          Permissions: camera={permissionStatus.camera || 'unknown'}, mic={permissionStatus.microphone || 'unknown'}
-        </div>
-         {mediaError && (
-           <div className={styles.error}>
-             {mediaError}
-             <button onClick={retryWithSelectedDevices} className={styles.retryButton}>
-               Retry
-             </button>
-           </div>
-         )}
-       </div>
-     </div>
-   );
- };
+  const detectRemoteVoiceActivity = () => {
+    if (!analyserRef.current) return;
 
- export default MeetingPage;
+    const analyser = analyserRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const checkAudioLevel = () => {
+      if (!analyserRef.current) return;
+
+      analyser.getByteFrequencyData(dataArray);
+
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / bufferLength;
+
+      const threshold = 15;
+      setIsSpeaking(average > threshold);
+
+      requestAnimationFrame(checkAudioLevel);
+    };
+
+    checkAudioLevel();
+  };
+
+  return (
+    <div className={cn(styles['video-container'], { [styles.speaking]: isSpeaking })}>
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        className={styles.video}
+      />
+      <div className={styles['video-label']}>Participant</div>
+    </div>
+  );
+}
+
+export default MeetingPage;
