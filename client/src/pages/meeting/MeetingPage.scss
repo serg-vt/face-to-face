@@ -1,7 +1,8 @@
+// copied from MeetingPage.module.scss
 .meeting-page {
   width: 100%;
   height: 100vh;
-  background: #202124;
+  background: #222;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -394,3 +395,4 @@
     width: 280px;
   }
 }
+

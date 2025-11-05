@@ -1,12 +1,12 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import LandingPage from './pages/landing'
 import MeetingPage from './pages/meeting'
-import styles from './App.module.scss'
+import './App.scss'
 
 function App() {
   return (
     <Router>
-      <div className={styles.app}>
+      <div className="app">
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/meeting/:roomId" element={<MeetingPage />} />

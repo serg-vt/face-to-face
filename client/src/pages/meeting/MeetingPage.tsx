@@ -1,11 +1,14 @@
+import cn from 'classnames';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { FiCopy } from 'react-icons/fi';
-import cn from 'classnames';
-import styles from './MeetingPage.module.scss';
+
 import useMedia, { startRemoteVoiceDetection } from '../../hooks/useMedia';
+
 import Controls from "../../components/controls";
+
+import './MeetingPage.scss';
 
 interface PeerConnection {
   peer: RTCPeerConnection;
@@ -341,16 +344,16 @@ const MeetingPage = () => {
   };
 
   return (
-    <div className={styles['meeting-page']}>
-      <div className={styles['meeting-content']}>
-        <div className={styles['main-meeting-area']}>
+    <div className="meeting-page">
+      <div className="meeting-content">
+        <div className="main-meeting-area">
           {peers.size === 0 ? (
-            <div className={styles['empty-center']}>
+            <div className="empty-center">
               <h2>Waiting for others to join...</h2>
-              <p className={styles['room-id-hint']}>Room ID: <strong>{normalizedRoomId || roomId}</strong></p>
+              <p className="room-id-hint">Room ID: <strong>{normalizedRoomId || roomId}</strong></p>
               <div style={{marginTop:12}}>
                 <button
-                  className={styles['copy-btn']}
+                  className="copy-btn"
                   onClick={async () => {
                     try {
                       const toCopy = normalizedRoomId || roomId || '';
@@ -376,20 +379,20 @@ const MeetingPage = () => {
                   <FiCopy style={{ marginRight: 8 }} />
                   Copy Room ID
                 </button>
-                {copied && <span className={styles['copied-feedback']}>Copied!</span>}
+                {copied && <span className="copied-feedback">Copied!</span>}
               </div>
             </div>
           ) : (
-            <div className={styles['participants-grid']}>
+            <div className="participants-grid">
               {Array.from(peers.entries()).map(([userId, peerConnection]) => (
                 peerConnection.stream ? (
-                  <div key={userId} className={styles['grid-item']}>
+                  <div key={userId} className="grid-item">
                     <RemoteVideo stream={peerConnection.stream} displayName={peerConnection.displayName} />
                   </div>
                 ) : (
-                  <div key={userId} className={styles['grid-item']}>
-                    <div className={styles['video-container']}>
-                      <div className={styles['video-label']}>Connecting...</div>
+                  <div key={userId} className="grid-item">
+                    <div className="video-container">
+                      <div className="video-label">Connecting...</div>
                     </div>
                   </div>
                 )
@@ -398,15 +401,15 @@ const MeetingPage = () => {
           )}
 
           {/* Local Video - Bottom Right */}
-          <div className={cn(styles['local-video-container'], { [styles.speaking]: isSpeaking })}>
+          <div className={cn('local-video-container', { speaking: isSpeaking })}>
             <video
               ref={localVideoRef}
               autoPlay
               playsInline
               muted
-              className={styles['local-video']}
+              className="local-video"
             />
-            <div className={styles['video-label']}>You ({userName})</div>
+            <div className="video-label">You ({userName})</div>
           </div>
         </div>
       </div>
@@ -453,14 +456,14 @@ function RemoteVideo({ stream, displayName }: RemoteVideoProps) {
   }, [stream]);
 
   return (
-    <div className={cn(styles['video-container'], { [styles.speaking]: isSpeaking })}>
+    <div className={cn('video-container', { speaking: isSpeaking })}>
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className={styles.video}
+        className="video"
       />
-      {displayName && <div className={styles['video-label']}>{displayName}</div>}
+      {displayName && <div className="video-label">{displayName}</div>}
     </div>
   );
 }
