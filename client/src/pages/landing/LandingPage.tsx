@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './LandingPage.css';
+import cn from 'classnames';
+import styles from './LandingPage.module.scss';
 
 const LandingPage = () => {
   const [userName, setUserName] = useState('');
@@ -16,9 +17,6 @@ const LandingPage = () => {
       return;
     }
     const roomId = generateRoomId();
-    console.log('Create Meeting clicked');
-    console.log('User Name:', userName);
-    console.log('Room ID:', roomId);
 
     // Store userName in sessionStorage
     sessionStorage.setItem('userName', userName.trim());
@@ -34,10 +32,6 @@ const LandingPage = () => {
     }
     const roomId = prompt('Enter Room ID:');
     if (roomId && roomId.trim()) {
-      console.log('Join Meeting clicked');
-      console.log('User Name:', userName);
-      console.log('Room ID:', roomId);
-
       // Store userName in sessionStorage
       sessionStorage.setItem('userName', userName.trim());
 
@@ -47,9 +41,9 @@ const LandingPage = () => {
   };
 
   return (
-    <div className="landing-page">
-      <div className="landing-content">
-        <div className="name-input-section">
+    <div className={styles['landing-page']}>
+      <div className={styles['landing-content']}>
+        <div className={styles['name-input-section']}>
           <input
             type="text"
             id="user-name"
@@ -57,21 +51,21 @@ const LandingPage = () => {
             onChange={(e) => setUserName(e.target.value)}
             placeholder="Enter your display name"
             maxLength={50}
-            className="name-input"
+            className={styles['name-input']}
           />
         </div>
 
-        <div className="action-buttons">
+        <div className={styles['action-buttons']}>
           <button
             onClick={handleCreateMeeting}
-            className="btn btn-primary"
+            className={cn(styles.btn, styles['btn-primary'])}
             disabled={!userName.trim()}
           >
             Create Meeting
           </button>
           <button
             onClick={handleJoinMeeting}
-            className="btn btn-secondary"
+            className={cn(styles.btn, styles['btn-secondary'])}
             disabled={!userName.trim()}
           >
             Join Meeting
@@ -83,4 +77,3 @@ const LandingPage = () => {
 }
 
 export default LandingPage;
-

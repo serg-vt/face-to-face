@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { BsMicFill, BsMicMuteFill, BsCameraVideoFill, BsCameraVideoOffFill } from 'react-icons/bs';
 import { MdCallEnd } from 'react-icons/md';
-import './MeetingPage.css';
+import cn from 'classnames';
+import styles from './MeetingPage.module.scss';
 
 interface PeerConnection {
   peer: RTCPeerConnection;
@@ -399,18 +400,18 @@ const MeetingPage = () => {
   };
 
   return (
-    <div className="meeting-page">
+    <div className={styles['meeting-page']}>
       {/* Main content area */}
-      <div className="meeting-content">
+      <div className={styles['meeting-content']}>
         {/* Left sidebar with participants */}
-        <div className="participants-sidebar">
-          <h3 className="sidebar-title">Participants ({peers.size + 1})</h3>
-          <div className="participants-list">
+        <div className={styles['participants-sidebar']}>
+          <h3 className={styles['sidebar-title']}>Participants ({peers.size + 1})</h3>
+          <div className={styles['participants-list']}>
             {/* Remote Videos */}
             {peers.size === 0 ? (
-              <div className="no-participants">
+              <div className={styles['no-participants']}>
                 <p>Waiting for others to join...</p>
-                <p className="room-id-hint">Share room ID: <strong>{roomId}</strong></p>
+                <p className={styles['room-id-hint']}>Share room ID: <strong>{roomId}</strong></p>
               </div>
             ) : (
               Array.from(peers.entries()).map(([userId, peerConnection]) => {
@@ -421,8 +422,8 @@ const MeetingPage = () => {
                     stream={peerConnection.stream}
                   />
                 ) : (
-                  <div key={userId} className="video-container">
-                    <div className="video-label">Connecting...</div>
+                  <div key={userId} className={styles['video-container']}>
+                    <div className={styles['video-label']}>Connecting...</div>
                   </div>
                 );
               })
@@ -431,25 +432,25 @@ const MeetingPage = () => {
         </div>
 
         {/* Main meeting area */}
-        <div className="main-meeting-area">
+        <div className={styles['main-meeting-area']}>
           {/* Local Video - Bottom Right */}
-          <div className={`local-video-container ${isSpeaking ? 'speaking' : ''}`}>
+          <div className={cn(styles['local-video-container'], { [styles.speaking]: isSpeaking })}>
             <video
               ref={localVideoRef}
               autoPlay
               playsInline
               muted
-              className="local-video"
+              className={styles['local-video']}
             />
-            <div className="video-label">You ({userName})</div>
+            <div className={styles['video-label']}>You ({userName})</div>
           </div>
         </div>
       </div>
 
       {/* Controls Toolbar */}
-      <div className="controls-toolbar">
+      <div className={styles['controls-toolbar']}>
         <button
-          className={`control-btn ${!isAudioEnabled ? 'disabled' : ''}`}
+          className={cn(styles['control-btn'], { [styles.disabled]: !isAudioEnabled })}
           onClick={toggleAudio}
           title={isAudioEnabled ? 'Mute' : 'Unmute'}
         >
@@ -457,7 +458,7 @@ const MeetingPage = () => {
         </button>
 
         <button
-          className={`control-btn ${!isVideoEnabled ? 'disabled' : ''}`}
+          className={cn(styles['control-btn'], { [styles.disabled]: !isVideoEnabled })}
           onClick={toggleVideo}
           title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
         >
@@ -465,7 +466,7 @@ const MeetingPage = () => {
         </button>
 
         <button
-          className="control-btn leave-btn"
+          className={cn(styles['control-btn'], styles['leave-btn'])}
           onClick={handleLeave}
           title="Leave call"
         >
@@ -556,17 +557,16 @@ function RemoteVideo({ stream }: RemoteVideoProps) {
   };
 
   return (
-    <div className={`video-container ${isSpeaking ? 'speaking' : ''}`}>
+    <div className={cn(styles['video-container'], { [styles.speaking]: isSpeaking })}>
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className="video"
+        className={styles.video}
       />
-      <div className="video-label">Participant</div>
+      <div className={styles['video-label']}>Participant</div>
     </div>
   );
 }
 
 export default MeetingPage;
-
