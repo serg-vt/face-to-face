@@ -345,41 +345,29 @@ const MeetingPage = () => {
 
   return (
     <div className="meeting-page">
-      <div className="meeting-content">
-        <div className="main-meeting-area">
-          {peers.size === 0 ? (
-            <NoPeersPlaceholder
-              roomId={roomId || ''}
-              normalizedRoomId={normalizedRoomId}
-            />
-          ) : (
-            <div className="participants-grid">
-              {Array.from(peers.entries()).map(([userId, peerConnection]) => (
-                peerConnection.stream ? (
-                  <div key={userId} className="grid-item">
-                    <RemoteVideo
-                      stream={peerConnection.stream}
-                      displayName={peerConnection.displayName}
-                    />
-                  </div>
-                ) : (
-                  <div key={userId} className="grid-item">
-                    <div className="video-container">
-                      <div className="video-label">Connecting...</div>
-                    </div>
-                  </div>
-                )
-              ))}
+      {peers.size === 0 ? (
+        <NoPeersPlaceholder
+          roomId={roomId || ''}
+          normalizedRoomId={normalizedRoomId}
+        />
+      ) : (
+        <div className="meeting-page__grid">
+          {Array.from(peers.entries()).map(([userId, peerConnection]) => (
+            <div key={userId} className="meeting-page__grid-item">
+              <RemoteVideo
+                stream={peerConnection.stream}
+                displayName={peerConnection.displayName}
+              />
             </div>
-          )}
-
-          <LocalVideo
-            localVideoRef={localVideoRef}
-            userName={userName}
-            isSpeaking={isSpeaking}
-          />
+          ))}
         </div>
-      </div>
+      )}
+
+      <LocalVideo
+        localVideoRef={localVideoRef}
+        userName={userName}
+        isSpeaking={isSpeaking}
+      />
 
       <Controls
         isAudioEnabled={isAudioEnabled}

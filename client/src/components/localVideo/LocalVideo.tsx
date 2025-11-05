@@ -15,15 +15,19 @@ const LocalVideo = ({
   isSpeaking,
 }: LocalVideoProps) => {
   return (
-    <div className={cn('local-video-container', { speaking: isSpeaking })}>
+    <div className={
+      cn("local-video__container", {
+        "local-video__container--speaking": isSpeaking
+      })
+    }>
       <video
         ref={localVideoRef}
         autoPlay
         playsInline
         muted
-        className="local-video"
+        className="local-video__feed"
       />
-      <div className="video-label">You ({userName})</div>
+      {userName && <div className="local-video__label">You ({userName})</div>}
     </div>
   )
 }

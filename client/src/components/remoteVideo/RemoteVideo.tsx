@@ -4,17 +4,20 @@ import cn from "classnames";
 import { startRemoteVoiceDetection } from "../../hooks/useMedia.ts";
 
 interface RemoteVideoProps {
-  stream: MediaStream;
+  stream: MediaStream | undefined;
   displayName?: string;
 }
 
 const RemoteVideo = ({
-  stream, displayName
+  stream,
+  displayName,
 }: RemoteVideoProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   useEffect(() => {
+    if (!stream) return;
+
     console.log('RemoteVideo mounted with stream:', stream);
     console.log('Stream tracks:', stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
 
@@ -23,7 +26,6 @@ const RemoteVideo = ({
       console.log('Set srcObject for remote video');
     }
 
-    // Use shared remote voice detection helper
     const stop = startRemoteVoiceDetection(stream, (speaking) => {
       setIsSpeaking(speaking);
     });
@@ -33,15 +35,23 @@ const RemoteVideo = ({
     };
   }, [stream]);
 
-  return (
-    <div className={cn('video-container', { speaking: isSpeaking })}>
+  return stream ? (
+    <div className={
+      cn("remote-video__container", {
+        "remote-video__container--speaking": isSpeaking
+      })
+    }>
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className="video"
+        className="remote-video__feed"
       />
-      {displayName && <div className="video-label">{displayName}</div>}
+      {displayName && <div className="remote-video__label">{displayName}</div>}
+    </div>
+  ) : (
+    <div className="remote-video__container">
+      <div className="remote-video__label">Connecting...</div>
     </div>
   );
 }
