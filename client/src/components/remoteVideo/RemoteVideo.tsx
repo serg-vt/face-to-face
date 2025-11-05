@@ -3,6 +3,8 @@ import cn from "classnames";
 
 import { startRemoteVoiceDetection } from "../../hooks/useMedia.ts";
 
+import "./RemoteVideo.scss";
+
 interface RemoteVideoProps {
   stream: MediaStream | undefined;
   displayName?: string;
