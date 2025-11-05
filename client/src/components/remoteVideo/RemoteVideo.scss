@@ -1,7 +1,10 @@
 .remote-video {
   &__container {
     background: #000;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: auto 16 / 9;
+    height: 100%;
+    width: 100%;
+    display: flex;
 
     //box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     //border: 2px solid transparent;
@@ -16,7 +19,7 @@
   &__feed {
     width: 100%;
     max-height: 100vh;
-    object-fit: contain;
+    object-fit: cover;
   }
 
   &__label {

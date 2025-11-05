@@ -3,11 +3,10 @@
   height: 100vh;
 
   &__grid {
-    display: flex;
-    gap: 10px;
+    height: 100%;
   }
 
   &__grid-item {
-    flex: 1;
+    height: 100%;
   }
 }
