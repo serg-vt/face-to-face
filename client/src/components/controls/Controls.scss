@@ -11,14 +11,15 @@ $controls-background: #333;
 .controls {
   background-color: $controls-background;
   border-radius: 10px;
+  bottom: 10px;
   display: flex;
+  justify-content: space-between;
+  left: 50%;
+  max-width: 400px;
   padding: 10px;
   position: absolute;
-  bottom: 10px;
-  left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 20px);
-  justify-content: space-between;
 
   &__left {
     display: flex;

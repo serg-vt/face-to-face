@@ -1,25 +1,15 @@
 .remote-video {
   &__container {
-    background: #000;
-    // aspect-ratio: auto 16 / 9;
     height: 100%;
     width: 100%;
     display: flex;
-
-    //box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    //border: 2px solid transparent;
-    //transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    //
-    //&--speaking {
-    //  border-color: #2196f3;
-    //  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3);
-    //}
   }
 
   &__feed {
     width: 100%;
     max-height: 100vh;
     object-fit: contain;
+    aspect-ratio: auto;
   }
 
   &__label {
