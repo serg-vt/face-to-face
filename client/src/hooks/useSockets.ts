@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import type { MutableRefObject } from 'react';
+import type { RefObject } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 export interface PeerConnection {
@@ -13,7 +13,7 @@ export interface PeerConnection {
 interface UseSocketsProps {
   roomId: string;
   userName: string;
-  localStreamRef: MutableRefObject<MediaStream | null>;
+  localStreamRef: RefObject<MediaStream | null>;
 }
 
 const ICE_SERVERS = {
