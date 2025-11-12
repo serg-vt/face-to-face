@@ -35,7 +35,8 @@ const MeetingPage = () => {
   const {
     peers,
     initializeSocket,
-    disconnect
+    disconnect,
+    addLocalTracksToAllPeers
   } = useSockets({
     roomId: normalizedRoomId,
     userName,
@@ -50,6 +51,14 @@ const MeetingPage = () => {
       (localVideoRef.current as HTMLVideoElement).srcObject = localStream || null;
     }
   }, [localStream]);
+
+  // When local stream becomes available, add it to all existing peer connections
+  useEffect(() => {
+    if (localStream) {
+      console.log('Local stream available, adding tracks to all peers');
+      addLocalTracksToAllPeers();
+    }
+  }, [localStream, addLocalTracksToAllPeers]);
 
   useEffect(() => {
     // Redirect if no roomId
