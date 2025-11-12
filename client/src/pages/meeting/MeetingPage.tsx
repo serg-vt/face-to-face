@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
-import useMedia from '../../hooks/useMedia';
+import { useMediaContext } from '../../contexts/MediaContext';
 import useSockets from '../../hooks/useSockets';
 
 import Controls from "../../components/controls";
@@ -19,28 +19,27 @@ const MeetingPage = () => {
   const normalizedRoomId = roomId ? roomId.toLowerCase() : '';
   const userName = sessionStorage.getItem('userName') || 'Guest';
 
-  // Media hook - only pull what's needed here
+  // Media context - provides all media-related state and actions
   const {
     localStream,
-    localStreamRef,
     isAudioEnabled,
     isVideoEnabled,
     isSpeaking,
+    remotePeers,
     initializeMedia,
     toggleAudio,
-    toggleVideo
-  } = useMedia();
+    toggleVideo,
+    cleanup: cleanupMedia
+  } = useMediaContext();
 
   // Sockets hook - handles all WebRTC and socket.io logic
   const {
-    peers,
     initializeSocket,
     disconnect,
     addLocalTracksToAllPeers
   } = useSockets({
     roomId: normalizedRoomId,
-    userName,
-    localStreamRef
+    userName
   });
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -100,11 +99,8 @@ const MeetingPage = () => {
   };
 
   const cleanup = () => {
-    // Stop local stream
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
-    }
-    localStreamRef.current = null;
+    // Cleanup media (stops local stream, closes audio contexts)
+    cleanupMedia();
 
     // Disconnect socket and close all peer connections
     disconnect();
@@ -112,18 +108,19 @@ const MeetingPage = () => {
 
   return (
     <div className="meeting-page">
-      {peers.size === 0 ? (
+      {remotePeers.size === 0 ? (
         <NoPeersPlaceholder
           roomId={roomId || ''}
           normalizedRoomId={normalizedRoomId}
         />
       ) : (
         <div className="meeting-page__grid">
-          {Array.from(peers.entries()).map(([userId, peerConnection]) => (
-            <div key={userId} className="meeting-page__grid-item">
+          {Array.from(remotePeers.values()).map((peer) => (
+            <div key={peer.id} className="meeting-page__grid-item">
               <RemoteVideo
-                stream={peerConnection.stream}
-                displayName={peerConnection.displayName}
+                stream={peer.stream}
+                displayName={peer.displayName}
+                isSpeaking={peer.isSpeaking}
               />
             </div>
           ))}

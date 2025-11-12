@@ -1,21 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import cn from "classnames";
-
-import { startRemoteVoiceDetection } from "../../hooks/useMedia.ts";
 
 import "./RemoteVideo.scss";
 
 interface RemoteVideoProps {
   stream: MediaStream | undefined;
   displayName?: string;
+  isSpeaking?: boolean;
 }
 
 const RemoteVideo = ({
   stream,
   displayName,
+  isSpeaking = false
 }: RemoteVideoProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isSpeaking, setIsSpeaking] = useState(false);
 
   useEffect(() => {
     if (!stream) return;
@@ -27,14 +26,6 @@ const RemoteVideo = ({
       videoRef.current.srcObject = stream;
       console.log('Set srcObject for remote video');
     }
-
-    const stop = startRemoteVoiceDetection(stream, (speaking) => {
-      setIsSpeaking(speaking);
-    });
-
-    return () => {
-      try { stop(); } catch (err) { /* ignore */ }
-    };
   }, [stream]);
 
   return stream ? (

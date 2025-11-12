@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
-import type { RefObject } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { useMediaContext } from '../contexts/MediaContext';
 
 export interface PeerConnection {
   peer: RTCPeerConnection;
@@ -14,7 +14,6 @@ export interface PeerConnection {
 interface UseSocketsProps {
   roomId: string;
   userName: string;
-  localStreamRef: RefObject<MediaStream | null>;
 }
 
 const ICE_SERVERS = {
@@ -23,7 +22,8 @@ const ICE_SERVERS = {
   ]
 };
 
-const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
+const useSockets = ({ roomId, userName }: UseSocketsProps) => {
+  const { localStreamRef, addRemotePeer, updateRemotePeerStream, removeRemotePeer } = useMediaContext();
   const [peers, setPeers] = useState<Map<string, PeerConnection>>(new Map());
   const socketRef = useRef<Socket | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
@@ -51,7 +51,7 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
       }
     });
     setPeers(new Map(peersRef.current));
-  }, [localStreamRef]);
+  }, [localStreamRef, updateRemotePeerStream]);
 
   const createPeerConnection = useCallback((userId: string, isInitiator: boolean) => {
     const stream = localStreamRef.current;
@@ -121,7 +121,7 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
         }
       };
     }
-  }, [localStreamRef]);
+  }, [localStreamRef, updateRemotePeerStream]);
 
   const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, from: string) => {
     const stream = localStreamRef.current;
@@ -198,7 +198,7 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
 
     peersRef.current.set(from, peerConnection);
     setPeers(new Map(peersRef.current));
-  }, [localStreamRef]);
+  }, [localStreamRef, updateRemotePeerStream]);
 
   const removePeer = useCallback((userId: string) => {
     const peerConnection = peersRef.current.get(userId);
@@ -207,7 +207,10 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
       peersRef.current.delete(userId);
       setPeers(new Map(peersRef.current));
     }
-  }, []);
+
+    // Remove from MediaContext
+    removeRemotePeer(userId);
+  }, [removeRemotePeer]);
 
   const initializeSocket = useCallback(() => {
     // Prevent multiple socket initializations
@@ -271,6 +274,8 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
     socket.on('user-connected', (payload: { id: string; name?: string }) => {
       console.log('User connected payload:', payload);
       const { id, name } = payload;
+
+
       // Create receive-only peer entry (we will get their offer)
       createPeerConnection(id, false);
       // store name in the peer entry if available
@@ -336,7 +341,7 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
       console.log('User disconnected:', userId);
       removePeer(userId);
     });
-  }, [roomId, userName, createPeerConnection, handleOffer, removePeer]);
+  }, [roomId, userName, createPeerConnection, handleOffer, removePeer, addRemotePeer]);
 
   const disconnect = useCallback(() => {
     // Close all peer connections
