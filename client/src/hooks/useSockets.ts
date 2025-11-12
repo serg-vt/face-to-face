@@ -8,6 +8,7 @@ export interface PeerConnection {
   isSpeaking?: boolean;
   addedLocalTracks?: boolean;
   displayName?: string;
+  pendingIceCandidates?: RTCIceCandidateInit[];
 }
 
 interface UseSocketsProps {
@@ -26,6 +27,31 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
   const [peers, setPeers] = useState<Map<string, PeerConnection>>(new Map());
   const socketRef = useRef<Socket | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
+
+  // Function to add local tracks to a peer connection
+  const addLocalTracksToAllPeers = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+
+    console.log('Adding local tracks to all existing peers');
+    peersRef.current.forEach((peerConnection, userId) => {
+      // Only add tracks if we haven't already
+      if (!peerConnection.addedLocalTracks) {
+        console.log('Adding tracks to peer:', userId);
+        stream.getTracks().forEach(track => {
+          try {
+            peerConnection.peer.addTrack(track, stream);
+            console.log('Added track:', track.kind, 'to existing peer connection');
+          } catch (error) {
+            console.error('Error adding track to peer:', error);
+          }
+        });
+        peerConnection.addedLocalTracks = true;
+        peersRef.current.set(userId, peerConnection);
+      }
+    });
+    setPeers(new Map(peersRef.current));
+  }, [localStreamRef]);
 
   const createPeerConnection = useCallback((userId: string, isInitiator: boolean) => {
     const stream = localStreamRef.current;
@@ -149,6 +175,20 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
     };
 
     await peer.setRemoteDescription(new RTCSessionDescription(offer));
+
+    // Process any pending ICE candidates
+    if (peerConnection.pendingIceCandidates && peerConnection.pendingIceCandidates.length > 0) {
+      console.log('Processing', peerConnection.pendingIceCandidates.length, 'pending ICE candidates for', from);
+      for (const candidate of peerConnection.pendingIceCandidates) {
+        try {
+          await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+          console.error('Error adding pending ICE candidate:', error);
+        }
+      }
+      peerConnection.pendingIceCandidates = [];
+    }
+
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
 
@@ -233,6 +273,19 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
       const peerConnection = peersRef.current.get(from);
       if (peerConnection) {
         await peerConnection.peer.setRemoteDescription(new RTCSessionDescription(answer));
+
+        // Process any pending ICE candidates
+        if (peerConnection.pendingIceCandidates && peerConnection.pendingIceCandidates.length > 0) {
+          console.log('Processing', peerConnection.pendingIceCandidates.length, 'pending ICE candidates for', from);
+          for (const candidate of peerConnection.pendingIceCandidates) {
+            try {
+              await peerConnection.peer.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (error) {
+              console.error('Error adding pending ICE candidate:', error);
+            }
+          }
+          peerConnection.pendingIceCandidates = [];
+        }
       }
     });
 
@@ -241,8 +294,17 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
       const peerConnection = peersRef.current.get(from);
       if (peerConnection) {
         try {
-          await peerConnection.peer.addIceCandidate(new RTCIceCandidate(candidate));
-          console.log('Added ICE candidate from:', from);
+          // If remote description is not set yet, queue the candidate
+          if (!peerConnection.peer.remoteDescription) {
+            console.log('Queueing ICE candidate for', from, '- remote description not set yet');
+            if (!peerConnection.pendingIceCandidates) {
+              peerConnection.pendingIceCandidates = [];
+            }
+            peerConnection.pendingIceCandidates.push(candidate);
+          } else {
+            await peerConnection.peer.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('Added ICE candidate from:', from);
+          }
         } catch (error) {
           console.error('Error adding ICE candidate:', error);
         }
@@ -276,7 +338,8 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
   return {
     peers,
     initializeSocket,
-    disconnect
+    disconnect,
+    addLocalTracksToAllPeers
   };
 };
 
