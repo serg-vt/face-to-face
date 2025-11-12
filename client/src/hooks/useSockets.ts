@@ -28,14 +28,67 @@ const useSockets = ({ roomId, userName }: UseSocketsProps) => {
   const socketRef = useRef<Socket | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
 
-  // Function to add local tracks to a peer connection
+  // Helper function to setup common peer connection handlers
+  const setupPeerConnectionHandlers = useCallback((
+    peer: RTCPeerConnection,
+    peerConnection: PeerConnection,
+    peerId: string
+  ) => {
+    // Monitor connection state
+    peer.oniceconnectionstatechange = () => {
+      console.log('ICE connection state for', peerId, ':', peer.iceConnectionState);
+    };
+
+    peer.onconnectionstatechange = () => {
+      console.log('Connection state for', peerId, ':', peer.connectionState);
+    };
+
+    // Handle ICE candidates
+    peer.onicecandidate = (event) => {
+      if (event.candidate && socketRef.current) {
+        socketRef.current.emit('ice-candidate', {
+          candidate: event.candidate,
+          to: peerId
+        });
+      }
+    };
+
+    // Handle incoming stream
+    peer.ontrack = (event) => {
+      console.log('Received track from:', peerId, 'Track kind:', event.track.kind);
+      if (event.streams?.[0]) {
+        peerConnection.stream = event.streams[0];
+        console.log('Stream set for peer:', peerId, 'Stream tracks:', event.streams[0].getTracks().length);
+        peersRef.current.set(peerId, peerConnection);
+        setPeers(new Map(peersRef.current));
+        updateRemotePeerStream(peerId, event.streams[0]);
+      } else {
+        console.error('No stream in track event for peer:', peerId);
+      }
+    };
+  }, [updateRemotePeerStream]);
+
+  // Helper function to add local tracks to a peer
+  const addLocalTracksToPeer = useCallback((peer: RTCPeerConnection, peerConnection: PeerConnection) => {
+    const stream = localStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach(track => {
+        peer.addTrack(track, stream);
+        console.log('Added track:', track.kind, 'to peer connection');
+      });
+      peerConnection.addedLocalTracks = true;
+    } else {
+      console.log('No local media available — creating receive-only peer connection');
+    }
+  }, [localStreamRef]);
+
+  // Function to add local tracks to all existing peer connections
   const addLocalTracksToAllPeers = useCallback(() => {
     const stream = localStreamRef.current;
     if (!stream) return;
 
     console.log('Adding local tracks to all existing peers');
     peersRef.current.forEach((peerConnection, userId) => {
-      // Only add tracks if we haven't already
       if (!peerConnection.addedLocalTracks) {
         console.log('Adding tracks to peer:', userId);
         stream.getTracks().forEach(track => {
@@ -51,59 +104,20 @@ const useSockets = ({ roomId, userName }: UseSocketsProps) => {
       }
     });
     setPeers(new Map(peersRef.current));
-  }, [localStreamRef, updateRemotePeerStream]);
+  }, [localStreamRef]);
 
   const createPeerConnection = useCallback((userId: string, isInitiator: boolean) => {
-    const stream = localStreamRef.current;
-
     console.log('Creating peer connection to:', userId, 'isInitiator:', isInitiator);
     const peer = new RTCPeerConnection(ICE_SERVERS);
     const peerConnection: PeerConnection = { peer };
 
-    // Monitor connection state
-    peer.oniceconnectionstatechange = () => {
-      console.log('ICE connection state for', userId, ':', peer.iceConnectionState);
-    };
+    // Setup common handlers
+    setupPeerConnectionHandlers(peer, peerConnection, userId);
 
-    peer.onconnectionstatechange = () => {
-      console.log('Connection state for', userId, ':', peer.connectionState);
-    };
+    // Add local tracks if available
+    addLocalTracksToPeer(peer, peerConnection);
 
-    // Add local stream to peer connection only if available
-    if (stream) {
-      stream.getTracks().forEach(track => {
-        peer.addTrack(track, stream);
-        console.log('Added track:', track.kind, 'to peer connection');
-      });
-      peerConnection.addedLocalTracks = true;
-    } else {
-      console.log('No local media available — creating receive-only peer connection');
-    }
-
-    // Handle ICE candidates
-    peer.onicecandidate = (event) => {
-      if (event.candidate && socketRef.current) {
-        socketRef.current.emit('ice-candidate', {
-          candidate: event.candidate,
-          to: userId
-        });
-      }
-    };
-
-    // Handle incoming stream
-    peer.ontrack = (event) => {
-      console.log('Received track from:', userId, 'Track kind:', event.track.kind);
-      console.log('Event streams:', event.streams);
-      if (event.streams && event.streams[0]) {
-        peerConnection.stream = event.streams[0];
-        console.log('Stream set for peer:', userId, 'Stream tracks:', event.streams[0].getTracks().length);
-        peersRef.current.set(userId, peerConnection);
-        setPeers(new Map(peersRef.current));
-      } else {
-        console.error('No stream in track event for peer:', userId);
-      }
-    };
-
+    // Store peer connection
     peersRef.current.set(userId, peerConnection);
     setPeers(new Map(peersRef.current));
 
@@ -121,64 +135,12 @@ const useSockets = ({ roomId, userName }: UseSocketsProps) => {
         }
       };
     }
-  }, [localStreamRef, updateRemotePeerStream]);
+  }, [setupPeerConnectionHandlers, addLocalTracksToPeer]);
 
-  const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, from: string) => {
-    const stream = localStreamRef.current;
-
-    console.log('Handling offer from:', from);
-    const peer = new RTCPeerConnection(ICE_SERVERS);
-    const peerConnection: PeerConnection = { peer };
-
-    // Monitor connection state
-    peer.oniceconnectionstatechange = () => {
-      console.log('ICE connection state for', from, ':', peer.iceConnectionState);
-    };
-
-    peer.onconnectionstatechange = () => {
-      console.log('Connection state for', from, ':', peer.connectionState);
-    };
-
-    // Add local stream if available
-    if (stream) {
-      stream.getTracks().forEach(track => {
-        peer.addTrack(track, stream);
-        console.log('Added track:', track.kind, 'for answering offer');
-      });
-      peerConnection.addedLocalTracks = true;
-    } else {
-      console.log('No local media available when answering offer — creating receive-only connection');
-    }
-
-    // Handle ICE candidates
-    peer.onicecandidate = (event) => {
-      if (event.candidate && socketRef.current) {
-        socketRef.current.emit('ice-candidate', {
-          candidate: event.candidate,
-          to: from
-        });
-      }
-    };
-
-    // Handle incoming stream
-    peer.ontrack = (event) => {
-      console.log('Received track from:', from, 'Track kind:', event.track.kind);
-      console.log('Event streams:', event.streams);
-      if (event.streams && event.streams[0]) {
-        peerConnection.stream = event.streams[0];
-        console.log('Stream set for peer:', from, 'Stream tracks:', event.streams[0].getTracks().length);
-        peersRef.current.set(from, peerConnection);
-        setPeers(new Map(peersRef.current));
-      } else {
-        console.error('No stream in track event for peer:', from);
-      }
-    };
-
-    await peer.setRemoteDescription(new RTCSessionDescription(offer));
-
-    // Process any pending ICE candidates
-    if (peerConnection.pendingIceCandidates && peerConnection.pendingIceCandidates.length > 0) {
-      console.log('Processing', peerConnection.pendingIceCandidates.length, 'pending ICE candidates for', from);
+  // Helper to process pending ICE candidates
+  const processPendingIceCandidates = useCallback(async (peer: RTCPeerConnection, peerConnection: PeerConnection, peerId: string) => {
+    if (peerConnection.pendingIceCandidates?.length) {
+      console.log('Processing', peerConnection.pendingIceCandidates.length, 'pending ICE candidates for', peerId);
       for (const candidate of peerConnection.pendingIceCandidates) {
         try {
           await peer.addIceCandidate(new RTCIceCandidate(candidate));
@@ -188,7 +150,24 @@ const useSockets = ({ roomId, userName }: UseSocketsProps) => {
       }
       peerConnection.pendingIceCandidates = [];
     }
+  }, []);
 
+  const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, from: string) => {
+    console.log('Handling offer from:', from);
+    const peer = new RTCPeerConnection(ICE_SERVERS);
+    const peerConnection: PeerConnection = { peer };
+
+    // Setup common handlers
+    setupPeerConnectionHandlers(peer, peerConnection, from);
+
+    // Add local tracks if available
+    addLocalTracksToPeer(peer, peerConnection);
+
+    // Set remote description and process pending ICE candidates
+    await peer.setRemoteDescription(new RTCSessionDescription(offer));
+    await processPendingIceCandidates(peer, peerConnection, from);
+
+    // Create and send answer
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
 
@@ -196,9 +175,10 @@ const useSockets = ({ roomId, userName }: UseSocketsProps) => {
       socketRef.current.emit('answer', { answer, to: from });
     }
 
+    // Store peer connection
     peersRef.current.set(from, peerConnection);
     setPeers(new Map(peersRef.current));
-  }, [localStreamRef, updateRemotePeerStream]);
+  }, [setupPeerConnectionHandlers, addLocalTracksToPeer, processPendingIceCandidates]);
 
   const removePeer = useCallback((userId: string) => {
     const peerConnection = peersRef.current.get(userId);
@@ -258,9 +238,8 @@ const useSockets = ({ roomId, userName }: UseSocketsProps) => {
     // Handle existing users (array of {id,name})
     socket.on('existing-users', (users: Array<{id:string,name:string}>) => {
       console.log('Existing users in room (with names):', users);
-      // For each existing user, create peer connection (we are the new joiner)
       users.forEach(u => {
-        // create connection (initiator) and then store display name on the peer entry
+        addRemotePeer(u.id, u.name || 'Participant');
         createPeerConnection(u.id, true);
         const pc = peersRef.current.get(u.id);
         if (pc) {
@@ -275,10 +254,8 @@ const useSockets = ({ roomId, userName }: UseSocketsProps) => {
       console.log('User connected payload:', payload);
       const { id, name } = payload;
 
-
-      // Create receive-only peer entry (we will get their offer)
+      addRemotePeer(id, name || 'Participant');
       createPeerConnection(id, false);
-      // store name in the peer entry if available
       const pc = peersRef.current.get(id);
       if (pc) {
         pc.displayName = name || 'Participant';
@@ -297,19 +274,7 @@ const useSockets = ({ roomId, userName }: UseSocketsProps) => {
       const peerConnection = peersRef.current.get(from);
       if (peerConnection) {
         await peerConnection.peer.setRemoteDescription(new RTCSessionDescription(answer));
-
-        // Process any pending ICE candidates
-        if (peerConnection.pendingIceCandidates && peerConnection.pendingIceCandidates.length > 0) {
-          console.log('Processing', peerConnection.pendingIceCandidates.length, 'pending ICE candidates for', from);
-          for (const candidate of peerConnection.pendingIceCandidates) {
-            try {
-              await peerConnection.peer.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch (error) {
-              console.error('Error adding pending ICE candidate:', error);
-            }
-          }
-          peerConnection.pendingIceCandidates = [];
-        }
+        await processPendingIceCandidates(peerConnection.peer, peerConnection, from);
       }
     });
 
@@ -341,7 +306,7 @@ const useSockets = ({ roomId, userName }: UseSocketsProps) => {
       console.log('User disconnected:', userId);
       removePeer(userId);
     });
-  }, [roomId, userName, createPeerConnection, handleOffer, removePeer, addRemotePeer]);
+  }, [roomId, userName, createPeerConnection, handleOffer, removePeer, addRemotePeer, processPendingIceCandidates]);
 
   const disconnect = useCallback(() => {
     // Close all peer connections

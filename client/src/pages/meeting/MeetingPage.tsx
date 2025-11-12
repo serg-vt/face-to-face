@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 import { useMediaContext } from '../../contexts/MediaContext';
@@ -45,14 +45,26 @@ const MeetingPage = () => {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const tracksAddedRef = useRef(false);
 
+  // Cleanup function - defined before useEffect to avoid reference issues
+  const cleanup = useCallback(() => {
+    cleanupMedia();
+    disconnect();
+  }, [cleanupMedia, disconnect]);
+
+  const handleLeave = useCallback(() => {
+    cleanup();
+    sessionStorage.removeItem('userName');
+    navigate('/');
+  }, [cleanup, navigate]);
+
   // Attach the hook-provided localStream to the local preview element
   useEffect(() => {
     if (localVideoRef.current) {
-      (localVideoRef.current as HTMLVideoElement).srcObject = localStream || null;
+      localVideoRef.current.srcObject = localStream || null;
     }
   }, [localStream]);
 
-  // When local stream becomes available, add it to all existing peer connections
+  // When a local stream becomes available, add it to all existing peer connections
   useEffect(() => {
     if (localStream && !tracksAddedRef.current) {
       console.log('Local stream available, adding tracks to all peers');
@@ -75,36 +87,14 @@ const MeetingPage = () => {
       return;
     }
 
-    // Initialize media in background and start socket immediately so user can join
-    const init = () => {
-      // Start media acquisition but don't block socket initialization
-      initializeMedia().catch((err) => console.warn('initializeMedia failed:', err));
-      // Initialize socket immediately so user can join even without media
-      initializeSocket();
-    };
+    // Initialize media and socket
+    initializeMedia().catch((err) => console.warn('initializeMedia failed:', err));
+    initializeSocket();
 
-    init();
-
-    return () => {
-      // Cleanup
-      cleanup();
-    };
+    return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, normalizedRoomId]);
 
-  const handleLeave = () => {
-    cleanup();
-    sessionStorage.removeItem('userName');
-    navigate('/');
-  };
-
-  const cleanup = () => {
-    // Cleanup media (stops local stream, closes audio contexts)
-    cleanupMedia();
-
-    // Disconnect socket and close all peer connections
-    disconnect();
-  };
 
   return (
     <div className="meeting-page">
