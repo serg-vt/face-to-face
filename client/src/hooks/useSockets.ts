@@ -210,6 +210,12 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
   }, []);
 
   const initializeSocket = useCallback(() => {
+    // Prevent multiple socket initializations
+    if (socketRef.current) {
+      console.log('Socket already initialized, skipping...');
+      return;
+    }
+
     // In production (deployed), connect to same origin as the app
     // In development, use VITE_SERVER_URL or localhost:3000
     let serverUrl;
@@ -224,13 +230,26 @@ const useSockets = ({ roomId, userName, localStreamRef }: UseSocketsProps) => {
     }
 
     console.log('Connecting to Socket.IO server:', serverUrl);
-    const socket = io(serverUrl);
+    const socket = io(serverUrl, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {
       console.log('Connected to server:', socket.id);
       // Send both roomId and display name
       socket.emit('join-room', { roomId, name: userName });
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason);
     });
 
     // Handle existing users (array of {id,name})

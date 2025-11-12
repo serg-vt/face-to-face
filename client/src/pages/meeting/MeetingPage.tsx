@@ -44,6 +44,7 @@ const MeetingPage = () => {
   });
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const tracksAddedRef = useRef(false);
 
   // Attach the hook-provided localStream to the local preview element
   useEffect(() => {
@@ -54,11 +55,13 @@ const MeetingPage = () => {
 
   // When local stream becomes available, add it to all existing peer connections
   useEffect(() => {
-    if (localStream) {
+    if (localStream && !tracksAddedRef.current) {
       console.log('Local stream available, adding tracks to all peers');
       addLocalTracksToAllPeers();
+      tracksAddedRef.current = true;
     }
-  }, [localStream, addLocalTracksToAllPeers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localStream]);
 
   useEffect(() => {
     // Redirect if no roomId
@@ -87,7 +90,8 @@ const MeetingPage = () => {
       // Cleanup
       cleanup();
     };
-  }, [roomId, navigate, normalizedRoomId, initializeMedia, initializeSocket]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, normalizedRoomId]);
 
   const handleLeave = () => {
     cleanup();
